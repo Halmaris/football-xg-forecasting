@@ -9,9 +9,12 @@ library(patchwork)
 library(scales)
 library(tidytext)
 
-response_scale <- 'log'   # main analysis: 'log'; sensitivity analysis: 'raw'
+response_scale <- 'log' # main analysis: 'log'; sensitivity analysis: 'raw'
 
-dir.create('figs', showWarnings = FALSE)
+results_dir <- 'results'
+figure_dir <- 'figs'
+
+dir.create(figure_dir, showWarnings = FALSE, recursive = TRUE)
 
 df <- read_csv('df.csv', show_col_types = FALSE)
 df_model <- read_csv('df_model.csv', show_col_types = FALSE)
@@ -61,7 +64,12 @@ df_model %>%
 
 # Table 7 ####
 
-team_match_xg <- df %>%
+df_plot <- df %>%
+  group_by(match_id) %>%
+  filter(!any(period > 2, na.rm = TRUE)) %>%
+  ungroup()
+
+team_match_xg <- df_plot %>%
   filter(!is.na(statsbomb_xg)) %>%
   group_by(match_id, team_id) %>%
   summarise(
@@ -211,7 +219,7 @@ p <- ggplot(example_series, aes(x = match_number, y = xG_for)) +
     legend.position = 'bottom'
   )
 
-ggsave(filename = 'figs/example_xg_series.pdf',
+ggsave(filename = file.path(figure_dir, 'example_xg_series.pdf'),
        plot = p,
        width = 7.2,
        height = 4.8,
@@ -228,11 +236,14 @@ prediction_files <- tibble::tribble(
   'Mixed-effects model',  'lmm'
 ) %>%
   mutate(
-    file = paste0(
-      file_prefix,
-      '_',
-      response_scale,
-      '_test_predictions_long.csv'
+    file = file.path(
+      results_dir,
+      paste0(
+        file_prefix,
+        '_',
+        response_scale,
+        '_test_predictions_long.csv'
+      )
     )
   )
 
@@ -317,70 +328,39 @@ p <- (top_row / middle_row / bottom_row) +
   )
 
 ggsave(
-  filename = 'figs/observed_vs_predicted_xgfor_test.pdf',
+  filename = file.path(figure_dir, 'observed_vs_predicted_xgfor_test.pdf'),
   plot = p,
   width = 7.2,
   height = 6.2,
   device = cairo_pdf
 )
 
-# Figure: XGBoost importance ####
+# Figure: XGBoost grouped permutation importance ####
 
 importance <- read_csv(
-  'xgb_log_importance.csv',
+  file.path(results_dir, 'xgb_log_importance.csv'),
   show_col_types = FALSE
 )
 
-grouped_importance <- importance %>%
+plot_df <- importance %>%
   mutate(
-    feature_group = case_when(
-      str_detect(Feature, '^cat__home_away_') ~ 'Venue (home/away)',
-      str_detect(Feature, '^cat__competition_id_') ~ 'Competition identity',
-      str_detect(Feature, '^cat__season_id_') ~ 'Season identity',
-      str_detect(Feature, '^cat__team_id_') ~ 'Team identity',
-      str_detect(Feature, '^cat__opponent_id_') ~ 'Opponent identity',
-      str_detect(Feature, '^num__opponent_rolling\\d+_xG_for$') ~ 'Opponent attacking history',
-      str_detect(Feature, '^num__opponent_rolling\\d+_xG_against$') ~ 'Opponent defensive history',
-      str_detect(Feature, '^num__opponent_rolling\\d+_xG_diff$') ~ 'Opponent xG-difference history',
-      str_detect(Feature, '^num__(rolling\\d+|lag\\d+)_xG_for$') ~ 'Team attacking history',
-      str_detect(Feature, '^num__(rolling\\d+|lag\\d+)_xG_against$') ~ 'Team defensive history',
-      str_detect(Feature, '^num__(rolling\\d+|lag\\d+)_xG_diff$') ~ 'Team xG-difference history',
-      Feature %in% c('num__match_week', 'num__n_previous_matches') ~ 'Match timing and experience',
-      TRUE ~ 'Other'
-    )
-  ) %>%
-  group_by(feature_group) %>%
-  summarise(
-    TotalGain = sum(TotalGain, na.rm = TRUE),
-    Weight = sum(Weight, na.rm = TRUE),
-    n_encoded_features = n(),
-    .groups = 'drop'
-  ) %>%
-  mutate(
-    total_gain_share = TotalGain / sum(TotalGain),
-    relative_importance = 100 * TotalGain / max(TotalGain),
+    relative_importance =
+      100 * delta_mae_mean / max(delta_mae_mean, na.rm = TRUE),
+    
     variable_type = case_when(
-      str_detect(feature_group, 'identity$') ~ 'Identity variables',
+      str_detect(feature_group, 'identity$') ~
+        'Identity variables',
       feature_group %in% c(
         'Venue (home/away)',
         'Match timing and experience'
-      ) ~ 'Match context',
-      TRUE ~ 'Performance history'
-    )
-  ) %>% 
-  arrange(desc(TotalGain))
-
-plot_df <- grouped_importance %>%
-  slice_head(n = 10) %>%
-  mutate(
-    feature_label = paste0(
-      feature_group,
-      '\n(k = ',
-      n_encoded_features,
-      ')'
+      ) ~
+        'Match context',
+      TRUE ~
+        'Performance history'
     ),
+    
     feature_label = reorder(
-      feature_label,
+      feature_group,
       relative_importance
     )
   )
@@ -393,9 +373,16 @@ p <- ggplot(
     fill = variable_type
   )
 ) +
-  geom_col(width = 0.80) +
+  geom_col(
+    width = 0.80
+  ) +
   geom_text(
-    aes(label = sprintf('%.1f%%', relative_importance)),
+    aes(
+      label = sprintf(
+        '%.1f%%',
+        relative_importance
+      )
+    ),
     hjust = -0.15,
     size = 3.4
   ) +
@@ -416,56 +403,87 @@ p <- ggplot(
   scale_x_continuous(
     limits = c(0, 112),
     breaks = seq(0, 100, 20),
-    labels = function(x) paste0(x, '%'),
-    expand = expansion(mult = c(0, 0))
+    labels = function(x) {
+      paste0(x, '%')
+    },
+    expand = expansion(
+      mult = c(0, 0)
+    )
   ) +
   labs(
-    x = 'Relative total gain importance',
+    x = 'Relative permutation importance',
     y = NULL
   ) +
   theme_classic() +
   theme(
     axis.line.y = element_blank(),
     axis.ticks.y = element_blank(),
-    axis.text.x = element_text(size = 12),
+    
+    axis.text.x = element_text(
+      size = 12
+    ),
+    
     axis.text.y = element_text(
       size = 12,
       lineheight = 0.95,
       margin = margin(r = 7)
     ),
-    axis.title.x = element_text(size = 12),
+    
+    axis.title.x = element_text(
+      size = 12
+    ),
+    
     legend.position = 'inside',
     legend.position.inside = c(0.98, 0.03),
     legend.justification = c('right', 'bottom'),
+    
     legend.background = element_rect(
       fill = 'white',
       colour = 'grey70',
       linewidth = 0.5
     ),
-    legend.text = element_text(size = 11),
-    legend.key.height = grid::unit(0.35, 'cm'),
-    legend.key.width = grid::unit(0.45, 'cm'),
-    legend.key.spacing.y = grid::unit(0.1, 'cm')
+    
+    legend.text = element_text(
+      size = 11
+    ),
+    
+    legend.key.height = grid::unit(
+      0.35,
+      'cm'
+    ),
+    
+    legend.key.width = grid::unit(
+      0.45,
+      'cm'
+    ),
+    
+    legend.key.spacing.y = grid::unit(
+      0.1,
+      'cm'
+    )
   )
 
-ggsave(filename = 'figs/xgb_log_grouped_feature_importance.pdf',
-       plot = p,
-       width = 7.2,
-       height = 6.2,
-       device = cairo_pdf)
-
-write_csv(grouped_importance,
-          'xgb_log_grouped_feature_importance.csv')
+ggsave(
+  filename = file.path(
+    figure_dir,
+    'xgb_log_grouped_feature_importance.pdf'
+  ),
+  plot = p,
+  width = 7.2,
+  height = 6.2,
+  device = cairo_pdf
+)
 
 # Figure: ARIMA models ####
 
-arima_counts <- read_csv('arima_log_model_counts.csv', 
+arima_counts <- read_csv(file.path(results_dir, 'arima_log_model_counts.csv'), 
                          show_col_types = FALSE) %>%
   filter(response_scale == 'log', target == 'xG_for') %>%
   mutate(arima_model = coalesce(arima_model, 'Unclassified')) %>%
   group_by(arima_model) %>%
   summarise(n = sum(n), .groups = 'drop') %>%
-  arrange(desc(n))
+  arrange(desc(n)) %>% 
+  filter(arima_model != 'Unclassified')
 
 total_n <- sum(arima_counts$n)
 
@@ -567,7 +585,7 @@ p <- ggplot(
     )
   ) +
   scale_x_continuous(
-    limits = c(0, 4.6),
+    limits = c(0, 5.2),
     breaks = log10(c(1, 10, 30, 100, 300, 1000, 3000, 10000)),
     labels = c('1', '10', '30', '100', '300', '1,000', '3,000', '10,000'),
     expand = expansion(mult = c(0, 0))
@@ -608,7 +626,7 @@ p <- ggplot(
     plot.margin = margin(5.5, 15, 5.5, 5.5)
   )
 
-ggsave(filename = 'figs/arima_log_model_distribution.pdf',
+ggsave(filename = file.path(figure_dir, 'arima_log_model_distribution.pdf'),
        plot = p,
        width = 7.2,
        height = 6.2,
@@ -617,7 +635,7 @@ ggsave(filename = 'figs/arima_log_model_distribution.pdf',
 # Figure: Forest plot for CI ####
 
 plot_df <- read_csv(
-  'results/bootstrap_log_mae_differences_vs_rolling.csv',
+  file.path(results_dir, 'bootstrap_log_mae_differences_vs_rolling.csv'),
   show_col_types = FALSE
 ) %>%
   filter(
@@ -744,7 +762,7 @@ labels = c(
     plot.margin = margin(6, 12, 6, 6)
   )
 
-ggsave(filename = 'figs/bootstrap_mae_difference_forest.pdf',
+ggsave(filename = file.path(figure_dir, 'bootstrap_mae_difference_forest.pdf'),
   plot = p,
   width = 7.2,
   height = 5.6,
@@ -753,7 +771,7 @@ ggsave(filename = 'figs/bootstrap_mae_difference_forest.pdf',
 # Figure: TCN training
 
 training_history <- read_csv(
-  'tcn_log_selected_trial_training_history.csv',
+  file.path(results_dir, 'tcn_log_selected_trial_training_history.csv'),
   show_col_types = FALSE
 )
 
@@ -862,7 +880,7 @@ p <- ggplot(
     plot.margin = margin(6, 12, 6, 6)
   )
 
-ggsave(filename = 'figs/tcn_log_selected_trial_learning_curve.pdf',
+ggsave(filename = file.path(figure_dir, 'tcn_log_selected_trial_learning_curve.pdf'),
   plot = p,
   width = 7.2,
   height = 4.8,
@@ -970,7 +988,7 @@ competition_labels <- tibble(
   )
 
 df <- read_csv(
-  'results/xgb_loco_log_vs_rolling_by_competition.csv'
+  file.path(results_dir, 'xgb_loco_log_vs_rolling_by_competition.csv')
 ) %>%
   filter(target %in% c('xG_for', 'xG_diff')) %>%
   left_join(
@@ -1043,9 +1061,8 @@ df %>%
     axis.text.y = element_markdown()
   ) -> p
 
-ggsave(filename = 'figs/loco_delta_mae.pdf',
+ggsave(filename = file.path(figure_dir, 'loco_delta_mae.pdf'),
        plot = p,
        width = 7.2,
        height = 6.8,
        device = cairo_pdf)
-

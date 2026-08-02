@@ -33,6 +33,7 @@ output_dir = Path('results')
 response_scales = ['log', 'raw']
 rolling_windows = [3, 5, 8, 10]
 n_trials = 100
+permutation_repeats = 100
 use_gpu = True
 
 output_dir.mkdir(exist_ok=True)
@@ -83,6 +84,54 @@ def make_model(numeric, categorical, params):
         ('preprocess', preprocess),
         ('xgb', xgb.XGBRegressor(**params)),
     ])
+
+
+def grouped_permutation_importance(
+    model, x, y, feature_groups, response_scale, n_repeats, seed
+):
+    rng = np.random.default_rng(seed)
+
+    baseline_pred = model.predict(x)
+    if response_scale == 'log':
+        baseline_pred = np.expm1(baseline_pred)
+    baseline_pred = np.maximum(baseline_pred, 0)
+    baseline_mae = np.mean(np.abs(baseline_pred - np.asarray(y)))
+
+    results = []
+
+    for feature_group, columns in feature_groups.items():
+        columns = [column for column in columns if column in x.columns]
+        delta_mae = []
+
+        for _ in range(n_repeats):
+            order = rng.permutation(len(x))
+            x_permuted = x.copy()
+            x_permuted[columns] = x.iloc[order][columns].to_numpy()
+
+            pred = model.predict(x_permuted)
+            if response_scale == 'log':
+                pred = np.expm1(pred)
+            pred = np.maximum(pred, 0)
+
+            permuted_mae = np.mean(np.abs(pred - np.asarray(y)))
+            delta_mae.append(permuted_mae - baseline_mae)
+
+        delta_mae = np.asarray(delta_mae)
+        results.append({
+            'response_scale': response_scale,
+            'feature_group': feature_group,
+            'n_features': len(columns),
+            'n_repeats': n_repeats,
+            'baseline_mae': baseline_mae,
+            'delta_mae_mean': delta_mae.mean(),
+            'delta_mae_sd': delta_mae.std(ddof=1),
+            'delta_mae_q025': np.quantile(delta_mae, 0.025),
+            'delta_mae_q975': np.quantile(delta_mae, 0.975),
+        })
+
+    return pd.DataFrame(results).sort_values(
+        'delta_mae_mean', ascending=False
+    )
 
 
 def pair_predictions(predictions):
@@ -263,12 +312,48 @@ for scale_no, response_scale in enumerate(response_scales):
         ),
     }])
 
-    feature_names = final_model.named_steps['preprocess'].get_feature_names_out()
-    importance = pd.DataFrame({
-        'response_scale': response_scale,
-        'feature': feature_names,
-        'gain': final_model.named_steps['xgb'].feature_importances_,
-    }).sort_values('gain', ascending=False)
+    feature_groups = {
+        'Team attacking history': [
+            'lag1_xG_for', 'lag2_xG_for', 'lag3_xG_for', 'lag5_xG_for',
+            f'rolling{best_k}_xG_for',
+        ],
+        'Team defensive history': [
+            'lag1_xG_against', 'lag2_xG_against',
+            'lag3_xG_against', 'lag5_xG_against',
+            f'rolling{best_k}_xG_against',
+        ],
+        'Team xG-difference history': [
+            'lag1_xG_diff', 'lag2_xG_diff', 'lag3_xG_diff', 'lag5_xG_diff',
+            f'rolling{best_k}_xG_diff',
+        ],
+        'Opponent attacking history': [
+            f'opponent_rolling{best_k}_xG_for',
+        ],
+        'Opponent defensive history': [
+            f'opponent_rolling{best_k}_xG_against',
+        ],
+        'Opponent xG-difference history': [
+            f'opponent_rolling{best_k}_xG_diff',
+        ],
+        'Team identity': ['team_id'],
+        'Opponent identity': ['opponent_id'],
+        'Competition identity': ['competition_id'],
+        'Season identity': ['season_id'],
+        'Venue (home/away)': ['home_away'],
+        'Match timing and experience': [
+            'match_week', 'n_previous_matches',
+        ],
+    }
+
+    importance = grouped_permutation_importance(
+        model=final_model,
+        x=test[features],
+        y=test['xG_for'],
+        feature_groups=feature_groups,
+        response_scale=response_scale,
+        n_repeats=permutation_repeats,
+        seed=scale_seed + 10_000,
+    )
 
     feature_list = pd.DataFrame({
         'response_scale': response_scale,
