@@ -476,12 +476,21 @@ ggsave(
 
 # Figure: ARIMA models ####
 
-arima_counts <- read_csv(file.path(results_dir, 'arima_log_model_counts.csv'), 
-                         show_col_types = FALSE) %>%
-  filter(response_scale == 'log', target == 'xG_for') %>%
-  mutate(arima_model = coalesce(arima_model, 'Unclassified')) %>%
+arima_counts <- read_csv(
+  file.path(results_dir, 'arima_log_model_counts.csv'),
+  show_col_types = FALSE
+) %>%
+  filter(
+    response_scale == 'log',
+    target == 'xG_for',
+    split == 'test',
+    !is.na(arima_model)
+  ) %>%
   group_by(arima_model) %>%
-  summarise(n = sum(n), .groups = 'drop') %>%
+  summarise(
+    n = sum(n),
+    .groups = 'drop'
+  ) %>%
   arrange(desc(n)) %>% 
   filter(arima_model != 'Unclassified')
 
