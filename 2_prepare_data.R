@@ -8,6 +8,7 @@ library(readr)
 # Input:  df.csv in the current directory (shot-level data).
 # Output: df_model.csv in the current directory, containing team-match outcomes,
 #         lagged and rolling features, opponent features, and temporal data splits.
+# Matches containing extra time or penalty shoot-outs are excluded entirely.
 
 input_file <- 'df.csv'
 output_file <- 'df_model.csv'
@@ -68,11 +69,40 @@ df <- read_csv(input_file, show_col_types = FALSE) %>%
       as.character
     ),
     match_week = as.integer(match_week),
+    period = as.integer(period),
     goals_for = as.numeric(goals_for),
     goals_against = as.numeric(goals_against),
     is_goal = as.integer(is_goal),
     statsbomb_xg = as.numeric(statsbomb_xg)
   )
+
+# Exclude complete matches containing extra time or penalty shoot-outs ####
+
+excluded_matches <- df %>%
+  group_by(competition_id, season_id, match_id) %>%
+  summarise(
+    has_extra_time = any(period %in% c(3L, 4L), na.rm = TRUE),
+    has_shootout = any(period == 5L, na.rm = TRUE),
+    .groups = 'drop'
+  ) %>%
+  filter(has_extra_time | has_shootout)
+
+exclusion_summary <- excluded_matches %>%
+  summarise(
+    excluded_matches = n(),
+    with_extra_time = sum(has_extra_time),
+    with_shootout = sum(has_shootout)
+  )
+
+print(exclusion_summary)
+
+df <- df %>%
+  anti_join(
+    excluded_matches,
+    by = c('competition_id', 'season_id', 'match_id')
+  )
+
+stopifnot(!any(df$period > 2L, na.rm = TRUE))
 
 # One row per team and match, including teams with no shots ####
 
@@ -253,5 +283,9 @@ df_model <- df_model %>%
 
 write_csv(df_model, output_file)
 
-df_model %>%
+# Final data audit ####
+
+final_audit <- df_model %>%
   count(split, name = 'n_team_matches')
+
+print(final_audit)
