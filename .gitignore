@@ -1,0 +1,15 @@
+results/
+figs/
+
+df.csv
+df_model.csv
+
+.Rhistory
+.RData
+.Rproj.user/
+
+__pycache__/
+*.pyc
+
+.DS_Store
+.env
