@@ -15,6 +15,7 @@ results_dir <- 'results'
 figure_dir <- 'figs'
 
 dir.create(figure_dir, showWarnings = FALSE, recursive = TRUE)
+dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
 
 df <- read_csv('df.csv', show_col_types = FALSE)
 df_model <- read_csv('df_model.csv', show_col_types = FALSE)
@@ -1075,3 +1076,120 @@ ggsave(filename = file.path(figure_dir, 'loco_delta_mae.pdf'),
        width = 7.2,
        height = 6.8,
        device = cairo_pdf)
+
+# Calendar leakage ####
+df_model <- read_csv(
+  'df_model.csv',
+  show_col_types = FALSE
+) %>%
+  mutate(
+    match_date = as.Date(match_date)
+  )
+
+fit_df <- df_model %>%
+  filter(
+    split %in% c('train', 'validation'),
+    !is.na(match_date)
+  )
+
+test_df <- df_model %>%
+  filter(
+    split == 'test',
+    !is.na(match_date)
+  )
+
+fit_dates <- sort(as.numeric(fit_df$match_date))
+n_fit <- length(fit_dates)
+
+panel_fit_end <- fit_df %>%
+  group_by(
+    competition_id,
+    season_id
+  ) %>%
+  summarise(
+    last_fit_date_same_panel = max(match_date),
+    .groups = 'drop'
+  )
+
+panel_end_dates <- panel_fit_end$last_fit_date_same_panel
+
+calendar_overlap <- test_df %>%
+  select(
+    competition_id,
+    season_id,
+    match_id,
+    team_id,
+    match_date
+  ) %>%
+  left_join(
+    panel_fit_end,
+    by = c(
+      'competition_id',
+      'season_id'
+    )
+  ) %>%
+  mutate(
+    # Liczba wszystkich obserwacji dopasowania późniejszych
+    # niż dana obserwacja testowa
+    n_fit_later = n_fit - findInterval(
+      as.numeric(match_date),
+      fit_dates
+    ),
+    
+    pct_fit_later = 100 * n_fit_later / n_fit,
+    
+    any_fit_later = n_fit_later > 0,
+    
+    # Liczba par liga–sezon zawierających późniejsze dane
+    n_panels_later = vapply(
+      match_date,
+      function(x) {
+        sum(panel_end_dates > x)
+      },
+      integer(1)
+    ),
+    
+    # Kontrola, czy problem występuje również
+    # wewnątrz tej samej pary liga–sezon
+    same_panel_future = (
+      last_fit_date_same_panel > match_date
+    )
+  )
+
+calendar_overlap_summary <- calendar_overlap %>%
+  summarise(
+    n_test = n(),
+    
+    n_test_with_later_fit = sum(any_fit_later),
+    pct_test_with_later_fit = 100 * mean(any_fit_later),
+    
+    median_n_fit_later = median(n_fit_later),
+    q1_n_fit_later = quantile(n_fit_later, 0.25),
+    q3_n_fit_later = quantile(n_fit_later, 0.75),
+    
+    median_pct_fit_later = median(pct_fit_later),
+    q1_pct_fit_later = quantile(pct_fit_later, 0.25),
+    q3_pct_fit_later = quantile(pct_fit_later, 0.75),
+    
+    median_n_panels_later = median(n_panels_later),
+    q1_n_panels_later = quantile(n_panels_later, 0.25),
+    q3_n_panels_later = quantile(n_panels_later, 0.75),
+    
+    n_same_panel_future = sum(
+      same_panel_future,
+      na.rm = TRUE
+    ),
+    pct_same_panel_future = 100 * mean(
+      same_panel_future,
+      na.rm = TRUE
+    )
+  )
+
+write_csv(
+  calendar_overlap,
+  file.path(
+    'results',
+    'calendar_overlap_test_observations.csv'
+  )
+write_csv(calendar_overlap_summary,
+          file.path(results_dir, 'calendar_overlap_summary.csv'))

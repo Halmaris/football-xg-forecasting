@@ -36,6 +36,7 @@ use_gpu = True
 variants = [
     'full',
     'matched_information',
+    'context_only',
     'without_identity',
     'without_opponent_history',
     'without_match_context',
@@ -79,6 +80,8 @@ def get_features(df, k, variant):
             or x == f'rolling{k}_xG_for'
         ]
         categorical = ['home_away']
+    elif variant == 'context_only':
+        numeric = []
     elif variant == 'without_identity':
         categorical = ['home_away']
     elif variant == 'without_opponent_history':
