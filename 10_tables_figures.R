@@ -644,13 +644,38 @@ ggsave(filename = file.path(figure_dir, 'arima_log_model_distribution.pdf'),
 
 # Figure: Forest plot for CI ####
 
-plot_df <- read_csv(
-  file.path(results_dir, 'bootstrap_log_mae_differences_vs_rolling.csv'),
+match_df <- read_csv(
+  file.path(
+    results_dir,
+    'bootstrap_log_mae_differences_vs_rolling.csv'
+  ),
   show_col_types = FALSE
+) %>%
+  mutate(
+    resampling = 'Match level'
+  )
+
+cluster_df <- read_csv(
+  file.path(
+    results_dir,
+    'bootstrap_cluster_log_mae_differences_vs_rolling.csv'
+  ),
+  show_col_types = FALSE
+) %>%
+  mutate(
+    resampling = 'Competition-season'
+  )
+
+plot_df <- bind_rows(
+  match_df,
+  cluster_df
 ) %>%
   filter(
     response_scale == 'log',
-    target %in% c('xG_for', 'xG_diff')
+    target %in% c(
+      'xG_for',
+      'xG_diff'
+    )
   ) %>%
   mutate(
     model = factor(
@@ -664,13 +689,34 @@ plot_df <- read_csv(
     ),
     target_label = factor(
       target,
-      levels = c('xG_for', 'xG_diff'),
-      labels = c('xG^F', 'xG^D')
+      levels = c(
+        'xG_for',
+        'xG_diff'
+      ),
+      labels = c(
+        'xG^F',
+        'xG^D'
+      )
     ),
-    significant = (
-      mae_difference_ci_low > 0 |
-        mae_difference_ci_high < 0
-    )
+    resampling = factor(
+      resampling,
+      levels = c(
+        'Match level',
+        'Competition-season'
+      )
+    ),
+    model_position = as.numeric(model),
+    y_position = model_position +
+      if_else(
+        resampling == 'Match level',
+        0.11,
+        -0.11
+      )
+  )
+
+point_df <- plot_df %>%
+  filter(
+    resampling == 'Match level'
   )
 
 x_range <- range(
@@ -683,56 +729,72 @@ x_range <- range(
 )
 
 x_padding <- 0.08 * diff(x_range)
-x_limits <- x_range + c(-x_padding, x_padding)
+x_limits <- x_range + c(
+  -x_padding,
+  x_padding
+)
 
-p <- ggplot(
-  plot_df,
-  aes(
-    x = mae_difference,
-    y = model
-  )
-) +
+p <- ggplot() +
   geom_vline(
     xintercept = 0,
     linetype = 'dashed',
     linewidth = 0.6
   ) +
   geom_segment(
+    data = plot_df,
     aes(
       x = mae_difference_ci_low,
       xend = mae_difference_ci_high,
-      yend = model
+      y = y_position,
+      yend = y_position,
+      colour = resampling
     ),
-    linewidth = 0.9
+    linewidth = 1.1
   ) +
   geom_point(
-    aes(shape = significant),
+    data = point_df,
+    aes(
+      x = mae_difference,
+      y = model_position
+    ),
     size = 3.2,
-    stroke = 0.9
+    shape = 21,
+    fill = 'white',
+    stroke = 1
   ) +
   facet_wrap(
     vars(target_label),
     ncol = 1,
-    scales = 'free_y',
     labeller = label_parsed
   ) +
-  scale_shape_manual(
-    name = NULL,
+  scale_colour_manual(
+    name = 'Bootstrap resampling',
     values = c(
-      'TRUE' = 16,
-      'FALSE' = 1
+      'Match level' = 'grey35',
+      'Competition-season' = '#0072B2'
+    )
+  ) +
+  scale_y_continuous(
+    breaks = seq_along(
+      levels(plot_df$model)
     ),
-    labels = c(
-      'TRUE' = 'Simultaneous 95% CI excludes zero',
-      'FALSE' = 'Simultaneous 95% CI includes zero'
+    labels = levels(
+      plot_df$model
+    ),
+    expand = expansion(
+      add = 0.45
     )
   ) +
   scale_x_continuous(
-    breaks = scales::pretty_breaks(n = 6),
+    breaks = scales::pretty_breaks(
+      n = 6
+    ),
     labels = scales::label_number(
       accuracy = 0.01
     ),
-    expand = expansion(mult = c(0, 0))
+    expand = expansion(
+      mult = c(0, 0)
+    )
   ) +
   coord_cartesian(
     xlim = x_limits,
@@ -748,7 +810,9 @@ p <- ggplot(
   theme(
     axis.line.y = element_blank(),
     axis.ticks.y = element_blank(),
-    axis.text.x = element_text(size = 11),
+    axis.text.x = element_text(
+      size = 11
+    ),
     axis.text.y = element_text(
       size = 11,
       margin = margin(r = 8)
@@ -757,26 +821,46 @@ p <- ggplot(
       size = 12,
       margin = margin(t = 8)
     ),
-    # strip.background = element_blank(),
     strip.text = element_text(
       size = 13,
       face = 'bold',
-      margin = margin(t = 6, b = 6)
+      margin = margin(
+        t = 6,
+        b = 6
+      )
     ),
-    panel.spacing.y = grid::unit(1.1, 'cm'),
+    panel.spacing.y = grid::unit(
+      1.1,
+      'cm'
+    ),
     legend.position = 'bottom',
     legend.justification = 'center',
     legend.location = 'plot',
     legend.box.just = 'center',
-    legend.text = element_text(size = 10),
-    plot.margin = margin(6, 12, 6, 6)
+    legend.text = element_text(
+      size = 10
+    ),
+    legend.title = element_text(
+      size = 10
+    ),
+    plot.margin = margin(
+      6,
+      12,
+      6,
+      6
+    )
   )
 
-ggsave(filename = file.path(figure_dir, 'bootstrap_mae_difference_forest.pdf'),
-       plot = p,
-       width = 7.2,
-       height = 5.6,
-       device = cairo_pdf)
+ggsave(
+  filename = file.path(
+    figure_dir,
+    'bootstrap_mae_difference_forest.pdf'
+  ),
+  plot = p,
+  width = 7.2,
+  height = 5.6,
+  device = cairo_pdf
+)
 
 # Figure: TCN training
 
