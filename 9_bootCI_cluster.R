@@ -1,13 +1,15 @@
-# Paired match-level bootstrap comparisons of MAE against the rolling-mean benchmark.
+# Competition-season cluster bootstrap sensitivity analysis of MAE differences
+# against the rolling-mean benchmark.
 #
 # Input:
+#   df_model.csv
 #   results/*_log_test_predictions_long.csv
 #
 # Output:
-#   results/bootstrap_log_mae_differences_vs_rolling.csv
-#   results/bootstrap_log_mae_replicates_vs_rolling.csv
-#   results/bootstrap_log_paired_errors_vs_rolling.csv
-#   results/bootstrap_log_settings.csv
+#   results/bootstrap_cluster_log_mae_differences_vs_rolling.csv
+#   results/bootstrap_cluster_log_mae_replicates_vs_rolling.csv
+#   results/bootstrap_cluster_log_paired_errors_vs_rolling.csv
+#   results/bootstrap_cluster_log_settings.csv
 
 library(dplyr)
 library(tidyr)
@@ -37,6 +39,17 @@ models_to_compare <- c(
   'Temporal ConvNet',
   'ARIMA'
 )
+
+cluster_key <- read_csv('df_model.csv', show_col_types = FALSE) %>%
+  filter(split == 'test') %>%
+  transmute(
+    match_id = as.character(match_id),
+    team_id = as.character(team_id),
+    competition_id = as.character(competition_id),
+    season_id = as.character(season_id),
+    cluster_id = paste(competition_id, season_id, sep = '_')
+  ) %>%
+  distinct()
 
 predictions <- map2_dfr(
   model_files$model,
@@ -88,6 +101,7 @@ paired_errors <- predictions %>%
     error_model = abs(actual - predicted)
   ) %>%
   inner_join(baseline, by = c('match_id', 'team_id', 'target')) %>%
+  inner_join(cluster_key, by = c('match_id', 'team_id')) %>%
   mutate(
     baseline_model = baseline_model,
     response_scale = 'log',
@@ -95,7 +109,16 @@ paired_errors <- predictions %>%
   )
 
 match_errors <- paired_errors %>%
-  group_by(model, baseline_model, response_scale, target, match_id) %>%
+  group_by(
+    model,
+    baseline_model,
+    response_scale,
+    target,
+    competition_id,
+    season_id,
+    cluster_id,
+    match_id
+  ) %>%
   summarise(
     model_error = mean(error_model),
     baseline_error = mean(error_baseline),
@@ -105,27 +128,52 @@ match_errors <- paired_errors %>%
 
 bootstrap_target <- function(df, target_name) {
   model_errors <- df %>%
-    select(match_id, model, model_error) %>%
+    select(cluster_id, match_id, model, model_error) %>%
     pivot_wider(names_from = model, values_from = model_error) %>%
-    arrange(match_id)
+    arrange(cluster_id, match_id)
 
   baseline_errors <- df %>%
-    distinct(match_id, baseline_error) %>%
-    arrange(match_id)
+    distinct(cluster_id, match_id, baseline_error) %>%
+    arrange(cluster_id, match_id)
 
-  wide <- left_join(model_errors, baseline_errors, by = 'match_id')
+  wide <- left_join(
+    model_errors,
+    baseline_errors,
+    by = c('cluster_id', 'match_id')
+  )
 
   model_matrix <- as.matrix(wide[, models_to_compare])
   baseline_vector <- wide$baseline_error
   difference_matrix <- sweep(model_matrix, 1, baseline_vector, '-')
 
+  cluster <- factor(wide$cluster_id)
+  n_clusters <- nlevels(cluster)
   n_matches <- nrow(wide)
   n_models <- length(models_to_compare)
+
+  cluster_n <- as.numeric(table(cluster))
+  cluster_model_sum <- rowsum(model_matrix, cluster, reorder = FALSE)
+  cluster_baseline_sum <- as.numeric(
+    rowsum(matrix(baseline_vector, ncol = 1), cluster, reorder = FALSE)
+  )
+  cluster_difference_sum <- rowsum(
+    difference_matrix,
+    cluster,
+    reorder = FALSE
+  )
 
   model_mae <- colMeans(model_matrix)
   baseline_mae <- mean(baseline_vector)
   mae_difference <- colMeans(difference_matrix)
-  standard_error <- apply(difference_matrix, 2, sd) / sqrt(n_matches)
+
+  cluster_residual <-
+    cluster_difference_sum - outer(cluster_n, mae_difference)
+
+  standard_error <- sqrt(
+    n_clusters / (n_clusters - 1) *
+      colSums(cluster_residual ^ 2)
+  ) / n_matches
+
   test_statistic <- mae_difference / standard_error
 
   boot_model_mae <- matrix(NA_real_, n_boot, n_models)
@@ -134,13 +182,36 @@ bootstrap_target <- function(df, target_name) {
   boot_statistic <- matrix(NA_real_, n_boot, n_models)
 
   for (b in seq_len(n_boot)) {
-    rows <- sample.int(n_matches, n_matches, replace = TRUE)
-    sampled_difference <- difference_matrix[rows, , drop = FALSE]
+    sampled_clusters <- sample.int(
+      n_clusters,
+      n_clusters,
+      replace = TRUE
+    )
 
-    boot_model_mae[b, ] <- colMeans(model_matrix[rows, , drop = FALSE])
-    boot_baseline_mae[b] <- mean(baseline_vector[rows])
-    boot_difference[b, ] <- colMeans(sampled_difference)
-    boot_se <- apply(sampled_difference, 2, sd) / sqrt(n_matches)
+    sampled_n <- cluster_n[sampled_clusters]
+    sampled_matches <- sum(sampled_n)
+
+    boot_model_mae[b, ] <- colSums(
+      cluster_model_sum[sampled_clusters, , drop = FALSE]
+    ) / sampled_matches
+
+    boot_baseline_mae[b] <- sum(
+      cluster_baseline_sum[sampled_clusters]
+    ) / sampled_matches
+
+    boot_difference[b, ] <- colSums(
+      cluster_difference_sum[sampled_clusters, , drop = FALSE]
+    ) / sampled_matches
+
+    sampled_residual <-
+      cluster_difference_sum[sampled_clusters, , drop = FALSE] -
+      outer(sampled_n, boot_difference[b, ])
+
+    boot_se <- sqrt(
+      n_clusters / (n_clusters - 1) *
+        colSums(sampled_residual ^ 2)
+    ) / sampled_matches
+
     boot_statistic[b, ] <-
       (boot_difference[b, ] - mae_difference) / boot_se
   }
@@ -210,6 +281,7 @@ bootstrap_target <- function(df, target_name) {
     target = target_name,
     n_rows = row_counts$n_rows[match(models_to_compare, row_counts$model)],
     n_matches = n_matches,
+    n_clusters = n_clusters,
     model_mae = model_mae,
     baseline_mae = baseline_mae,
     mae_difference = mae_difference,
@@ -242,6 +314,7 @@ bootstrap_target <- function(df, target_name) {
       baseline_model = baseline_model,
       response_scale = 'log',
       target = target_name,
+      n_clusters = n_clusters,
       model_mae = boot_model_mae[, j],
       baseline_mae = boot_baseline_mae,
       mae_difference = boot_difference[, j],
@@ -273,15 +346,24 @@ bootstrap_replicates <- results %>%
 
 write_csv(
   bootstrap_summary,
-  file.path(results_dir, 'bootstrap_log_mae_differences_vs_rolling.csv')
+  file.path(
+    results_dir,
+    'bootstrap_cluster_log_mae_differences_vs_rolling.csv'
+  )
 )
 write_csv(
   bootstrap_replicates,
-  file.path(results_dir, 'bootstrap_log_mae_replicates_vs_rolling.csv')
+  file.path(
+    results_dir,
+    'bootstrap_cluster_log_mae_replicates_vs_rolling.csv'
+  )
 )
 write_csv(
   paired_errors,
-  file.path(results_dir, 'bootstrap_log_paired_errors_vs_rolling.csv')
+  file.path(
+    results_dir,
+    'bootstrap_cluster_log_paired_errors_vs_rolling.csv'
+  )
 )
 write_csv(
   tibble(
@@ -290,7 +372,7 @@ write_csv(
     targets = paste(targets, collapse = ', '),
     models_compared = paste(models_to_compare, collapse = ', '),
     n_boot = n_boot,
-    bootstrap_unit = 'match_id',
+    bootstrap_unit = 'competition_id x season_id',
     multiplicity_adjustment = paste(
       'step-down Romano-Wolf maxT, separately within each target'
     ),
@@ -303,7 +385,7 @@ write_csv(
     ),
     run_seed = run_seed
   ),
-  file.path(results_dir, 'bootstrap_log_settings.csv')
+  file.path(results_dir, 'bootstrap_cluster_log_settings.csv')
 )
 
 bootstrap_summary

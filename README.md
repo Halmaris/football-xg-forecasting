@@ -4,13 +4,13 @@ Code accompanying the study:
 
 **From Shots to Forecasts: xG-Based Time Series for Football Team Performance Prediction**
 
-The repository contains R and Python scripts for forecasting team-level expected goals using rolling means, ARIMA, linear mixed-effects models, XGBoost and Temporal Convolutional Networks.
+The repository contains R and Python scripts for forecasting team-level expected goals using rolling means, ARIMA, linear mixed-effects models, XGBoost, and Temporal Convolutional Networks.
 
 ## Files
 
 All scripts and input data are expected to be located in the main project directory.
 
-The analysis is organised as follows:
+The analysis is organized as follows:
 
 * `1_get_data.R` – downloads shot-level StatsBomb data,
 * `2_prepare_data.R` – creates the team–match dataset and chronological train, validation and test splits,
@@ -19,16 +19,17 @@ The analysis is organised as follows:
 * `4_model_arima.R` – ARIMA models,
 * `5_model_lmm.R` – linear mixed-effects models,
 * `6_model_xgb.py` – XGBoost models,
-* `6_model_xgb_direct_xgdiff.py` – direct modelling of xG difference,
+* `6_model_xgb_direct_xgdiff.py` – direct modeling of xG difference,
 * `6_model_xgb_ablation.py` – XGBoost ablation analysis,
 * `6_model_xgb_loco.py` – leave-one-competition-out XGBoost evaluation,
-* `6_compare_xgdiff_approaches.R` – comparison of xG-difference modelling approaches,
+* `6_compare_xgdiff_approaches.R` – comparison of xG-difference modeling approaches,
 * `7_model_tcn.py` – Temporal Convolutional Network,
 * `8_summary.R` – summary of model performance,
 * `9_bootCI.R` – bootstrap comparisons with the rolling-mean benchmark,
-* `10_bootCI_pairwise.R` – pairwise bootstrap comparisons,
-* `11_tables_figures.R` – manuscript tables and figures,
-* `12_main.R` – runs the main analysis scripts.
+* `9_bootCI_pairwise.R` – pairwise bootstrap comparisons,
+* `9_bootCI_cluster.R` – cluster bootstrap comparisons,
+* `10_tables_figures.R` – manuscript tables and figures,
+* `11_main.R` – runs the main analysis scripts.
 
 ## Data
 
@@ -52,7 +53,7 @@ Run the scripts in numerical order, starting with:
 
 The model scripts can then be executed separately.
 
-`12_main.R` can be used to run the complete analysis, but the path to the local Python interpreter must first be updated.
+`11_main.R` can be used to run the complete analysis, but the path to the local Python interpreter must first be updated.
 
 The scripts create two output directories:
 
@@ -92,4 +93,4 @@ numpy, pandas, scikit-learn, optuna, xgboost, torch and matplotlib
 
 The source code is available under the MIT License.
 
-The licence applies only to the source code. Data and third-party materials are subject to their respective terms and licences.
+The license applies only to the source code. Data and third-party materials are subject to their respective terms and licenses.
