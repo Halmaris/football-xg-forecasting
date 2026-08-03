@@ -722,10 +722,10 @@ p <- ggplot(
       'TRUE' = 16,
       'FALSE' = 1
     ),
-labels = c(
-  'TRUE' = 'Simultaneous 95% CI excludes zero',
-  'FALSE' = 'Simultaneous 95% CI includes zero'
-)
+    labels = c(
+      'TRUE' = 'Simultaneous 95% CI excludes zero',
+      'FALSE' = 'Simultaneous 95% CI includes zero'
+    )
   ) +
   scale_x_continuous(
     breaks = scales::pretty_breaks(n = 6),
@@ -773,10 +773,10 @@ labels = c(
   )
 
 ggsave(filename = file.path(figure_dir, 'bootstrap_mae_difference_forest.pdf'),
-  plot = p,
-  width = 7.2,
-  height = 5.6,
-  device = cairo_pdf)
+       plot = p,
+       width = 7.2,
+       height = 5.6,
+       device = cairo_pdf)
 
 # Figure: TCN training
 
@@ -891,10 +891,10 @@ p <- ggplot(
   )
 
 ggsave(filename = file.path(figure_dir, 'tcn_log_selected_trial_learning_curve.pdf'),
-  plot = p,
-  width = 7.2,
-  height = 4.8,
-  device = cairo_pdf)
+       plot = p,
+       width = 7.2,
+       height = 4.8,
+       device = cairo_pdf)
 
 # Figure: LOCO ####
 competition_order <- c(
@@ -1185,11 +1185,7 @@ calendar_overlap_summary <- calendar_overlap %>%
     )
   )
 
-write_csv(
-  calendar_overlap,
-  file.path(
-    'results',
-    'calendar_overlap_test_observations.csv'
-  )
+write_csv(calendar_overlap,
+          file.path(results_dir, 'calendar_overlap_test_observations.csv'))
 write_csv(calendar_overlap_summary,
           file.path(results_dir, 'calendar_overlap_summary.csv'))
