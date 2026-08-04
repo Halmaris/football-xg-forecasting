@@ -2,6 +2,7 @@ library(dplyr)
 library(tidyr)
 library(stringr)
 library(ggplot2)
+library(ggtext)
 library(slider)
 library(readr)
 library(purrr)
@@ -275,10 +276,10 @@ plot_df <- plot_df %>%
     model = factor(model, levels = model_order)
   )
 
-lims <- range(
-  c(plot_df$actual, plot_df$predicted),
-  na.rm = TRUE
-)
+lims_x <- range(plot_df$actual,
+  na.rm = TRUE)
+lims_y <- range(plot_df$predicted,
+                na.rm = TRUE)
 
 make_model_plot <- function(model_name) {
   plot_df %>%
@@ -293,6 +294,7 @@ make_model_plot <- function(model_name) {
       color = 'red'
     ) +
     # coord_equal(xlim = lims, ylim = lims) +
+    lims(x = c(0, lims_x[2]), y = c(0, lims_y[2])) + 
     labs(
       x = expression(Observed~xG^F),
       y = expression(Predicted~xG^F),
@@ -981,38 +983,6 @@ ggsave(filename = file.path(figure_dir, 'tcn_log_selected_trial_learning_curve.p
        device = cairo_pdf)
 
 # Figure: LOCO ####
-competition_order <- c(
-  'Bundesliga (AUT)',
-  'Challenger Pro League (BEL)',
-  'Jupiler Pro League (BEL)',
-  '1. HNL (HRV)',
-  'Czech Liga (CZE)',
-  '1. Division (DNK)',
-  'Superliga (DNK)',
-  'Ligue 1 (FRA)',
-  'Ligue 2 (FRA)',
-  '1. Bundesliga (DEU)',
-  '2. Bundesliga (DEU)',
-  'Greek Super League (GRC)',
-  'NB I (HUN)',
-  'Serie B (ITA)',
-  'J1 League (JPN)',
-  'Eredivisie (NLD)',
-  'Eliteserien (NOR)',
-  'Ekstraklasa (POL)',
-  'Primeira Liga (PRT)',
-  'Segunda Liga (PRT)',
-  'Premiership (SCO)',
-  'Super Liga (SVK)',
-  'La Liga (ESP)',
-  'La Liga 2 (ESP)',
-  'Allsvenskan (SWE)',
-  'Superettan (SWE)',
-  'Swiss Super League (CHE)',
-  'Süper Lig (TUR)',
-  'Major League Soccer (USA)',
-  'Primera División (URY)'
-)
 
 second_tier <- c(
   'Challenger Pro League',
@@ -1064,7 +1034,38 @@ competition_labels <- tibble(
     'Major League Soccer',
     'Primera División'
   ),
-  competition_label_plain = competition_order
+  competition_label_plain = c(
+    'Bundesliga (AUT)',
+    'Challenger Pro League (BEL)',
+    'Jupiler Pro League (BEL)',
+    '1. HNL (HRV)',
+    'Czech Liga (CZE)',
+    '1. Division (DNK)',
+    'Superliga (DNK)',
+    'Ligue 1 (FRA)',
+    'Ligue 2 (FRA)',
+    '1. Bundesliga (DEU)',
+    '2. Bundesliga (DEU)',
+    'Greek Super League (GRC)',
+    'NB I (HUN)',
+    'Serie B (ITA)',
+    'J1 League (JPN)',
+    'Eredivisie (NLD)',
+    'Eliteserien (NOR)',
+    'Ekstraklasa (POL)',
+    'Primeira Liga (PRT)',
+    'Segunda Liga (PRT)',
+    'Premiership (SCO)',
+    'Super Liga (SVK)',
+    'La Liga (ESP)',
+    'La Liga 2 (ESP)',
+    'Allsvenskan (SWE)',
+    'Superettan (SWE)',
+    'Swiss Super League (CHE)',
+    'Süper Lig (TUR)',
+    'Major League Soccer (USA)',
+    'Primera División (URY)'
+  )
 ) %>%
   mutate(
     competition_label = case_when(
@@ -1082,13 +1083,27 @@ competition_labels <- tibble(
   )
 
 df <- read_csv(
-  file.path(results_dir, 'xgb_loco_log_vs_rolling_by_competition.csv')
+  file.path(
+    results_dir,
+    'xgb_loco_log_vs_rolling_by_competition.csv'
+  ),
+  show_col_types = FALSE
 ) %>%
-  filter(target %in% c('xG_for', 'xG_diff')) %>%
+  filter(
+    target %in% c('xG_for', 'xG_diff')
+  ) %>%
   left_join(
     competition_labels,
     by = 'held_out_competition_name'
-  ) %>%
+  )
+
+competition_order_xgf <- df %>%
+  filter(target == 'xG_for') %>%
+  arrange(desc(delta_mae_xgb_minus_rolling)) %>%
+  pull(competition_label) %>%
+  unique()
+
+df <- df %>%
   mutate(
     target = factor(
       target,
@@ -1097,31 +1112,47 @@ df <- read_csv(
     ),
     competition_label = factor(
       competition_label,
-      levels = rev(competition_labels$competition_label)
+      levels = competition_order_xgf
     )
   )
 
-non_europe_rows <- competition_labels %>%
-  filter(held_out_competition_name %in% non_europe) %>%
+non_europe_rows <- df %>%
+  filter(
+    held_out_competition_name %in% non_europe
+  ) %>%
+  distinct(
+    held_out_competition_name,
+    competition_label
+  ) %>%
   mutate(
-    y = match(
-      competition_label,
-      rev(competition_labels$competition_label)
-    ),
+    y = as.integer(competition_label),
     ymin = y - 0.5,
     ymax = y + 0.5
   )
 
-df %>%
-  ggplot(
-    aes(
-      x = delta_mae_xgb_minus_rolling,
-      y = competition_label
-    )
-  ) +
+mean_lines <- df %>%
+  group_by(target) %>%
+  summarise(
+    mean_delta_mae = mean(
+      delta_mae_xgb_minus_rolling,
+      na.rm = TRUE
+    ),
+    .groups = 'drop'
+  )
+
+p <- ggplot(
+  df,
+  aes(
+    x = delta_mae_xgb_minus_rolling,
+    y = competition_label
+  )
+) +
   geom_rect(
     data = non_europe_rows,
-    aes(ymin = ymin, ymax = ymax),
+    aes(
+      ymin = ymin,
+      ymax = ymax
+    ),
     xmin = -Inf,
     xmax = Inf,
     fill = '#FFF2CC',
@@ -1131,6 +1162,13 @@ df %>%
     xintercept = 0,
     linetype = 'dashed'
   ) +
+  geom_vline(
+    data = mean_lines,
+    aes(xintercept = mean_delta_mae),
+    linetype = 'dotdash',
+    linewidth = 0.5,
+    colour = 'grey40',
+    inherit.aes = FALSE)+ 
   geom_segment(
     aes(
       x = 0,
@@ -1142,6 +1180,7 @@ df %>%
   facet_wrap(
     ~target,
     nrow = 1,
+    scales = 'free_x',
     labeller = label_parsed
   ) +
   labs(
@@ -1152,14 +1191,26 @@ df %>%
   ) +
   theme_classic() +
   theme(
-    axis.text.y = element_markdown()
-  ) -> p
+    axis.text.y = ggtext::element_markdown(),
+    strip.background = element_rect(
+      fill = 'white',
+      colour = 'black'
+    ),
+    strip.text = element_text(
+      size = 11
+    )
+  )
 
-ggsave(filename = file.path(figure_dir, 'loco_delta_mae.pdf'),
-       plot = p,
-       width = 7.2,
-       height = 6.8,
-       device = cairo_pdf)
+ggsave(
+  filename = file.path(
+    figure_dir,
+    'loco_delta_mae.pdf'
+  ),
+  plot = p,
+  width = 7.2,
+  height = 6.8,
+  device = cairo_pdf
+)
 
 # Calendar leakage ####
 df_model <- read_csv(
