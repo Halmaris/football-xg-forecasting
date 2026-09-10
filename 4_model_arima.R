@@ -10,7 +10,7 @@ library(forecast)
 
 input_file <- 'df_model.csv'
 output_dir <- 'results'
-response_scale <- 'log'  # 'log' or 'raw'
+response_scale <- Sys.getenv('XG_RESPONSE_SCALE', 'log')  # 'log' or 'raw'
 min_train <- 8
 
 use_log <- response_scale == 'log'

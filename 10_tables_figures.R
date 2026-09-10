@@ -10,7 +10,7 @@ library(patchwork)
 library(scales)
 library(tidytext)
 
-response_scale <- 'log' # main analysis: 'log'; sensitivity analysis: 'raw'
+response_scale <- Sys.getenv('XG_RESPONSE_SCALE', 'log') # main analysis: 'log'; sensitivity analysis: 'raw'
 
 results_dir <- 'results'
 figure_dir <- 'figs'

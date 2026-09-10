@@ -1,0 +1,2 @@
+response_scale,run_seed,selected_trial,lookback,filters,kernel_size,n_blocks,dropout,dense_units,learning_rate,weight_decay,batch_size,epochs
+log,3990080874,99,10,64,3,3,0.08975251844704654,32,0.00012934491861418693,4.504243586033418e-06,256,34

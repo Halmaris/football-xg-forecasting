@@ -17,11 +17,12 @@ script saves:
 - final training history,
 - test predictions, test metrics and directional accuracy.
 
-The run seed is generated automatically and saved with the results. Therefore,
-subsequent runs are not identical.
+The recorded run seed is reused by default; XG_SEED can override it.
+Hardware and library versions may still affect floating-point results.
 """
 
 import random
+import os
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -46,7 +47,7 @@ min_delta = 1e-5
 gradient_clip_norm = 0.5
 
 output_dir.mkdir(exist_ok=True)
-run_seed = int(np.random.SeedSequence().generate_state(1)[0])
+run_seed = int(os.environ.get('XG_SEED', '3990080874'))
 random.seed(run_seed)
 np.random.seed(run_seed)
 torch.manual_seed(run_seed)
@@ -54,6 +55,7 @@ if torch.cuda.is_available():
     torch.cuda.manual_seed_all(run_seed)
 
 device = torch.device(
+    os.environ['XG_DEVICE'] if 'XG_DEVICE' in os.environ else
     'cuda' if torch.cuda.is_available()
     else 'mps' if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available()
     else 'cpu'

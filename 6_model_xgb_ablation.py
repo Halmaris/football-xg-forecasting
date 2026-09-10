@@ -13,6 +13,7 @@ configurations, test predictions, test metrics, directional accuracy, feature
 importance, feature lists and paired bootstrap comparisons with the full model.
 """
 
+import os
 from pathlib import Path
 
 import numpy as np
@@ -31,7 +32,7 @@ output_dir = Path('results')
 rolling_windows = [3, 5, 8, 10]
 n_trials = 100
 n_bootstrap = 5000
-use_gpu = True
+use_gpu = os.environ.get('XG_DEVICE', 'cuda') == 'cuda'
 
 variants = [
     'full',
@@ -43,7 +44,7 @@ variants = [
 ]
 
 output_dir.mkdir(exist_ok=True)
-run_seed = int(np.random.SeedSequence().generate_state(1)[0])
+run_seed = int(os.environ.get('XG_SEED', '350162372'))
 
 
 def metrics(actual, predicted):

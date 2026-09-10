@@ -1,0 +1,2 @@
+trial,seed,target,approach,rolling_window,n_numeric_features,n_categorical_features,max_depth,learning_rate,n_estimators,subsample,colsample_bytree,colsample_bylevel,min_child_weight,reg_alpha,reg_lambda,gamma,n,mae,rmse,bias,direction_accuracy,run_seed
+73,2174043150,xG_diff,direct_xG_diff,10,20,5,3,0.11046630480733455,1047,0.7937640607882164,0.9706401826104494,0.9447837921667924,21.717308125091186,0.4714823497198703,0.12085319139927374,1.1313770843821367,9618,0.7763933866119599,1.009344550635747,0.0016154835740327816,0.6635475150758994,2174043077

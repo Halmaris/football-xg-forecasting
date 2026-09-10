@@ -24,7 +24,7 @@ library(zoo)
 script_version <- '2026-07-31-01'
 input_file <- 'df_model.csv'
 output_dir <- 'results'
-response_scale <- 'log'  # 'log' or 'raw'
+response_scale <- Sys.getenv('XG_RESPONSE_SCALE', 'log')  # 'log' or 'raw'
 rolling_windows <- c(3, 5, 8, 10)
 
 file_prefix <- paste0('rolling_loco_', response_scale)

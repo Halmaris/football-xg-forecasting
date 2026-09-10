@@ -15,6 +15,7 @@ It also saves combined comparisons of both response scales.
 """
 
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -30,14 +31,16 @@ from sklearn.preprocessing import OneHotEncoder
 # Analysis settings
 input_file = 'df_model.csv'
 output_dir = Path('results')
-response_scales = ['log', 'raw']
+response_scales = os.environ.get('XG_RESPONSE_SCALES', 'log,raw').split(',')
+if not set(response_scales) <= {'log', 'raw'}:
+    raise ValueError('XG_RESPONSE_SCALES must contain log and/or raw')
 rolling_windows = [3, 5, 8, 10]
 n_trials = 100
 permutation_repeats = 100
-use_gpu = True
+use_gpu = os.environ.get('XG_DEVICE', 'cuda') == 'cuda'
 
 output_dir.mkdir(exist_ok=True)
-run_seed = int(np.random.SeedSequence().generate_state(1)[0])
+run_seed = int(os.environ.get('XG_SEED', '210787338'))
 
 
 def metrics(actual, predicted):
@@ -178,7 +181,11 @@ test = df[df['split'] == 'test'].copy()
 all_metrics = []
 all_direction = []
 
-for scale_no, response_scale in enumerate(response_scales):
+for response_scale in response_scales:
+    scale_no = ['log', 'raw'].index(response_scale)
+    # The archived log and raw fits came from separate recorded runs.
+    default_seed = {'log': 210787338, 'raw': 2357141922}[response_scale]
+    run_seed = int(os.environ.get('XG_SEED', str(default_seed)))
     scale_seed = int((run_seed + scale_no) % (2 ** 32 - 1))
     trial_results = []
 

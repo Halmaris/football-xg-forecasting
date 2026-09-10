@@ -14,6 +14,7 @@ importance and the feature list.
 """
 
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -31,10 +32,10 @@ input_file = 'df_model.csv'
 output_dir = Path('results')
 rolling_windows = [3, 5, 8, 10]
 n_trials = 100
-use_gpu = True
+use_gpu = os.environ.get('XG_DEVICE', 'cuda') == 'cuda'
 
 output_dir.mkdir(exist_ok=True)
-run_seed = int(np.random.SeedSequence().generate_state(1)[0])
+run_seed = int(os.environ.get('XG_SEED', '2174043077'))
 
 
 def metrics(actual, predicted):

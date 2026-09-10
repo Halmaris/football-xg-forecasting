@@ -1,5 +1,6 @@
 """LOCO evaluation of the tuned XGBoost model."""
 
+import os
 from pathlib import Path
 
 import numpy as np
@@ -14,12 +15,14 @@ from sklearn.preprocessing import OneHotEncoder
 # Analysis settings
 input_file = 'df_model.csv'
 output_dir = Path('results')
-best_config_file = output_dir / 'xgb_log_best_config.csv'
+# Preserve the full-panel configuration used for the archived LOCO results.
+best_config_file = Path(os.environ.get(
+    'XG_LOCO_CONFIG', 'reproducibility/xgb_loco_log_best_config.csv'))
 rolling_results_file = (
     output_dir / 'rolling_loco_log_test_metrics_by_competition.csv'
 )
 response_scale = 'log'
-use_gpu = True
+use_gpu = os.environ.get('XG_DEVICE', 'cuda') == 'cuda'
 
 file_prefix = f'xgb_loco_{response_scale}'
 output_dir.mkdir(exist_ok=True)

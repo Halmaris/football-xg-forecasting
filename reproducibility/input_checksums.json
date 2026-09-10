@@ -1,0 +1,11 @@
+{
+  "df_model.csv": "d3e9a09c077701ac7c325f11772e32647cd96bdee715523b28bb2971cf3589d2",
+  "df.csv": "8fa0ec9148d9046393941a24077a3c954c5ecf3e3667159f29c8dbe559c82521",
+  "rolling_log_test_predictions.csv": "0431be92895ee093e916fb47876d5b7776d335dd40185200dcf649bfb57e18b7",
+  "arima_log_test_predictions.csv": "08d7bb91d7031baa4dc43bd21d29f37b70cb86703795e6f717e12f22ee107f53",
+  "lmm_log_test_predictions.csv": "31091f36ed109b82541754135b52975e71509b42130375b199da7c45cb1d0f9d",
+  "xgb_log_test_predictions.csv": "a431394da59e4b3f6d84ffafc6f37cd7876b8b84e64db6ab282735cb69c6d0ea",
+  "tcn_log_test_predictions.csv": "8a55d18ead64ddb5bf383a6de3bd317f77f3e1131da72529967959c6c027923b",
+  "lmm_test_predictions.csv": "b31664370ad6b5a4b776c702b7db710a3810fa83d8a97b378b60a19d69f37523",
+  "xgb_test_predictions.csv": "e0afd4ca4cf2318f7deaa4b913919b1582dd2f659030a212b9bc208b5358a089"
+}

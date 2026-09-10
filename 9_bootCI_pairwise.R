@@ -22,7 +22,7 @@ n_boot <- 5000
 
 dir.create(results_dir, showWarnings = FALSE)
 
-run_seed <- sample.int(.Machine$integer.max, 1)
+run_seed <- as.integer(Sys.getenv('XG_SEED', '26629490'))
 set.seed(run_seed)
 
 model_files <- tibble::tribble(

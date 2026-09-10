@@ -21,7 +21,7 @@ baseline_model <- 'Rolling mean'
 targets <- c('xG_for', 'xG_diff')
 n_boot <- 5000
 
-run_seed <- sample.int(.Machine$integer.max, 1)
+run_seed <- as.integer(Sys.getenv('XG_SEED', '2100877207'))
 set.seed(run_seed)
 
 model_files <- tibble::tribble(

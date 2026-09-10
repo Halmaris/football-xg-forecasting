@@ -1,0 +1,2 @@
+response_scale,models,comparisons,targets,n_boot,bootstrap_unit,mae_difference,holm_correction,run_seed
+log,"Mixed-effects model, XGBoost, Temporal ConvNet",Mixed-effects model vs XGBoost; Mixed-effects model vs Temporal ConvNet; XGBoost vs Temporal ConvNet,"xG_for, xG_diff",5000,match_id,MAE(model_1) - MAE(model_2),separately within each target,26629490

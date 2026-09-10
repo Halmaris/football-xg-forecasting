@@ -1,0 +1,2 @@
+response_scale,baseline_model,targets,models_compared,n_boot,bootstrap_unit,multiplicity_adjustment,confidence_intervals,pointwise_intervals,run_seed
+log,Rolling mean,"xG_for, xG_diff","Mixed-effects model, XGBoost, Temporal ConvNet, ARIMA",5000,match_id,"step-down Romano-Wolf maxT, separately within each target","simultaneous 95% studentized maxT intervals, separately within each target",pointwise percentile intervals retained in separate columns,739899332

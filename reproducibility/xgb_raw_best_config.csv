@@ -1,0 +1,2 @@
+response_scale,trial,seed,rolling_window,n_numeric_features,n_categorical_features,max_depth,learning_rate,n_estimators,subsample,colsample_bytree,colsample_bylevel,min_child_weight,reg_alpha,reg_lambda,gamma,n,mae,rmse,bias,run_seed,scale_seed
+raw,52,2357141975,10,20,5,4,0.023708101275691923,1496,0.7489900543267952,0.953684805607279,0.6199716237351331,19.692842013749555,1.1812856894415775,0.4673519496327039,0.061694696062071674,9618,0.5444271193686973,0.6992545470029391,0.004121694340526576,2357141922,2357141923

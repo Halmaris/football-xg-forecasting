@@ -1,0 +1,15 @@
+{
+  "python": "3.12.13 | packaged by conda-forge | (main, Mar  5 2026, 17:06:14) [Clang 19.1.7 ]",
+  "architecture": "arm64",
+  "packages": {
+    "numpy": "2.5.1",
+    "pandas": "3.0.5",
+    "scipy": "1.18.0",
+    "scikit-learn": "1.9.0",
+    "xgboost": "3.3.0",
+    "optuna": "4.9.0",
+    "torch": "2.10.0",
+    "matplotlib": "3.11.1"
+  },
+  "clean_install_tested": false
+}
