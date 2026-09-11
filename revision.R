@@ -395,7 +395,6 @@ message('Figures and tables')
 out <- function(name) file.path(output_dir, name)
 ink <- '#222222'
 gray <- '#888888'
-league_colors <- c('Ekstraklasa' = '#0072B2', 'La Liga 2' = '#D55E00')
 start_plot <- function(name, height, title) {
   pdf(out(name), width = 9.1, height = height, family = 'Helvetica',
     useDingbats = FALSE, title = title)
@@ -436,6 +435,18 @@ for (sign in c(-1, 1)) {
 dev.off()
 
 points_data <- by_competition[order(by_competition$n_seasons, by_competition$mae_xgf), ]
+# Match the league groups in the manuscript; use a darker gold for small points.
+group_colors <- c('European top tier' = 'black', 'Second tier' = '#0057B8',
+  'Outside Europe' = '#C79B2B')
+second_tier <- c('Challenger Pro League', '1. Division', 'Ligue 2', '2. Bundesliga',
+  'Serie B', 'Segunda Liga', 'La Liga 2', 'Superettan')
+points_data$league_group <- case_when(
+  points_data$country_name %in% c('Japan', 'USA', 'Uruguay') ~ 'Outside Europe',
+  points_data$competition_name %in% second_tier ~ 'Second tier',
+  TRUE ~ 'European top tier')
+league_colors <- c('Ekstraklasa' = group_colors[['European top tier']],
+  'La Liga 2' = group_colors[['Second tier']])
+league_shapes <- c('Ekstraklasa' = 15, 'La Liga 2' = 17, 'Other competitions' = 16)
 offsets <- ave(points_data$n_seasons, points_data$n_seasons,
   FUN = function(x) if (length(x) == 1L) 0 else seq(-0.16, 0.16, length.out = length(x)))
 points_data$x_position <- points_data$n_seasons + offsets
@@ -449,40 +460,46 @@ points_data$display_label[matched] <- labels[points_data$competition_name[matche
 style <- theme_classic(base_size = 11, base_family = 'Helvetica') +
   theme(text = element_text(colour = ink),
     axis.text = element_text(colour = ink),
-    panel.border = element_rect(colour = ink, fill = NA, linewidth = 0.4),
-    axis.line = element_blank(), plot.title = element_text(size = 12),
+    panel.border = element_blank(),
+    legend.key = element_blank(),
+    axis.line = element_line(colour = ink, linewidth = 0.4),
+    plot.title = element_text(size = 12),
     plot.margin = margin(12, 8, 8, 6))
 left <- ggplot(points_data, aes(x_position, mae_xgf)) +
-  geom_point(aes(colour = highlight, shape = highlight), size = 2.1) +
+  geom_point(aes(colour = league_group, shape = highlight), size = 2.3) +
   geom_text_repel(aes(label = display_label),
     colour = ink, size = 3.5, box.padding = 0.20, point.padding = 0.16,
     min.segment.length = 0, segment.colour = '#999999', segment.size = 0.25,
     max.overlaps = Inf, max.iter = 20000, max.time = Inf, seed = 20260910,
     force = 2, force_pull = 0.12) +
-  scale_colour_manual(values = c(league_colors, 'Other competitions' = 'black')) +
-  scale_shape_manual(values = c('Ekstraklasa' = 16, 'La Liga 2' = 17,
-    'Other competitions' = 16)) +
+  scale_colour_manual(values = group_colors, breaks = names(group_colors)) +
+  scale_shape_manual(values = league_shapes) +
+  guides(colour = guide_legend(override.aes = list(shape = 16, size = 2.3)),
+    shape = 'none') +
   scale_x_continuous(breaks = 2:8, limits = c(0.5, 9.2),
     expand = expansion(mult = 0)) +
   scale_y_continuous(limits = c(0.47, 0.72), breaks = seq(0.50, 0.70, 0.05),
     expand = expansion(mult = 0)) +
   labs(x = 'Number of observed seasons', y = expression('Test MAE for ' * xG^F),
     title = '(A)  Competition-level error') + style +
-  theme(legend.position = 'none')
+  theme(legend.position = 'inside', legend.position.inside = c(0.98, 0.98),
+    legend.justification = c(1, 1), legend.title = element_blank(),
+    legend.background = element_blank(), legend.key.height = grid::unit(0.45, 'cm'))
 right <- ggplot(long_panels, aes(season_end, mae_xgf,
   colour = competition_name, linetype = competition_name, shape = competition_name)) +
-  geom_line(linewidth = 0.55) + geom_point(size = 2.1) +
+  geom_line(linewidth = 0.55) + geom_point(size = 2.3) +
   scale_colour_manual(values = league_colors) +
   scale_linetype_manual(values = c('Ekstraklasa' = 1, 'La Liga 2' = 2)) +
-  scale_shape_manual(values = c('Ekstraklasa' = 16, 'La Liga 2' = 17)) +
+  scale_shape_manual(values = league_shapes) +
   scale_x_continuous(breaks = 2019:2026) +
-  scale_y_continuous(limits = c(0.47, 0.72), breaks = seq(0.50, 0.70, 0.05),
+  scale_y_continuous(limits = c(0.47, 0.67), breaks = seq(0.50, 0.65, 0.05),
     expand = expansion(mult = 0)) +
   labs(x = 'Season ending year', y = expression('Test MAE for ' * xG^F),
     title = '(B)  Seasonal errors in two leagues') + style +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
-    legend.position = 'inside', legend.position.inside = c(0.97, 0.97),
-    legend.justification = c(1, 1), legend.title = element_blank(),
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+    legend.position = 'inside', legend.position.inside = c(1, 0),
+    legend.justification = c(1, 0), legend.title = element_blank(),
+    legend.margin = margin(3, 3, 3, 3),
     legend.background = element_blank(), legend.key.height = grid::unit(0.45, 'cm'))
 pdf(out('rolling_error_stability.pdf'), width = 10.6, height = 5.2,
   family = 'Helvetica', useDingbats = FALSE, title = 'Rolling forecast error by coverage and season')
@@ -606,7 +623,8 @@ write_table('calendar_forecasting', paste0('Calendar-time test performance with 
   'tab:calendar', 'lrrrr', c(' & \\multicolumn{2}{c}{$\\mathrm{xG}^{F}$} & \\multicolumn{2}{c}{$\\mathrm{xG}^{D}$} \\\\',
   'Model & MAE & RMSE & MAE & RMSE \\\\'), rows, spacing = 6)
 rows <- with(point_diagnostics, sprintf('%s & %.3f & %.3f & $%.3f$ & %.2f & %.2f \\\\',
-  model, mae, rmse, bias, direction_accuracy, weighted_direction_accuracy))
+  ifelse(model == 'TCN', 'Temporal ConvNet', model),
+  mae, rmse, bias, direction_accuracy, weighted_direction_accuracy))
 write_table('point_forecast_diagnostics', sprintf(paste0('Point-forecast diagnostics on %s common ',
   'test records. High-xG errors use %s records with observed $\\mathrm{xG}^{F}\\geq %.3f$, ',
   'the training 90th percentile. Directional scores use all common records; weighted ',
