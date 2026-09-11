@@ -1,4 +1,4 @@
-# Verified local analysis environment; Python 3.12.13
+# Original XGBoost and TCN models; Python 3.12.13. revision.R needs no Python.
 numpy==2.5.1
 pandas==3.0.5
 scipy==1.18.0

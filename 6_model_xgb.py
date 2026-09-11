@@ -232,10 +232,22 @@ for response_scale in response_scales:
         model.fit(train[features], y_train)
 
         pred = model.predict(validation[features])
+        pred_log = pred.copy()
         if response_scale == 'log':
             pred = np.expm1(pred)
         pred = np.maximum(pred, 0)
         result = metrics(validation['xG_for'], pred)
+
+        # Retain the best train-only validation forecasts for smearing in R.
+        if response_scale == 'log' and result['mae'] < min(
+            (row['mae'] for row in trial_results), default=np.inf
+        ):
+            calibration = validation[
+                ['match_id', 'team_id', 'competition_id', 'season_id', 'split']
+            ].copy()
+            calibration['actual_xG_for'] = validation['xG_for'].to_numpy()
+            calibration['predicted_log'] = pred_log.astype(float)
+            calibration.to_csv(output_dir / 'xgb_log_validation_predictions.csv', index=False)
 
         trial_results.append({
             'response_scale': response_scale,
