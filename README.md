@@ -77,7 +77,7 @@ the existing analysis already supplies this file, so no new XGBoost fit is neede
 Outputs are in `results/revision/`, with five LaTeX tables in its `tables/`
 subdirectory, three PDF figures, prediction and summary CSVs, fitted LMMs,
 bootstrap draws, and `sessionInfo.txt`. Figure colors are final publication
-colors; reviewer colors apply only to table text and captions.
+colors; red revision markings apply only to table text and captions.
 Earlier result folders are retained unchanged.
 
 Calendar validation starts on 1 July 2024 and testing on 1 July 2025. Fits are
