@@ -33,8 +33,17 @@ bootstrap comparisons, figures, and `revision.R`. Individual scripts can also
 be run separately. Model results are written to `results/`; original figures
 are written to `figs/`. To use CPU for the Python models, set `XG_DEVICE=cpu`.
 
+With saved forecasts, `source('6_compare_xgdiff_approaches.R')` regenerates
+the direct-versus-derived xGD comparison (Table 18), and
+`source('10_tables_figures.R')` regenerates the original figures and descriptive
+summaries. Tables 2 and 6 are exported as `results/data_coverage.csv` and
+`results/descriptive_team_match.csv`, retaining teams with no shots.
+Table 7 uses each main model's validation-selected configuration and metrics;
+the XGBoost file is `results/xgb_log_best_config.csv`.
+
 The primary split is chronological within each competition-season (70/15/15).
-Engineered features and TCN sequences reset within team-seasons. The rolling
+Engineered rolling means use up to K available previous matches and reset within
+team-seasons; TCN sequences require a complete lookback within the team-season. The rolling
 benchmark carries earlier eligible team records across seasons. Seeds are set
 in the scripts. `XG_SEED` can override the seed of an individual original script.
 LOCO uses the fixed `reproducibility/xgb_loco_log_best_config.csv` configuration;
@@ -78,4 +87,6 @@ contrast-specific offsets. Holm adjustment covers four contrasts per resampling
 scheme in the primary paired comparison. The R bootstrap uses different random
 draws from the earlier NumPy implementation, so confidence limits and p-values
 can differ slightly through Monte Carlo error; point estimates are unchanged.
-These sensitivity analyses reuse the existing data snapshot and are exploratory.
+The manuscript uses the R bootstrap results in `results/revision/`; earlier
+NumPy outputs are historical. Tables 16, 17, 19, 20 and 21 are generated in the
+`tables/` subdirectory. These analyses reuse the existing data snapshot and are exploratory.

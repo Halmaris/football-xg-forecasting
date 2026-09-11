@@ -524,12 +524,13 @@ for (i in seq_along(c('LMM', 'XGBoost'))) {
 invisible(dev.off())
 
 # 7. LaTeX tables (text in reviewer colors; rules remain black) ----
-write_table <- function(name, caption, label, columns, header, rows, color) {
+write_table <- function(name, caption, label, columns, header, rows, color,
+                        size = 'small', spacing = 5) {
   writeLines(c('\\begin{table}[!htbp]', paste0('\\color{', color, '}'),
     '\\arrayrulecolor{black}', paste0('\\captionsetup{labelfont={bf,color=', color,
       '},textfont={color=', color, '}}'), paste0('\\caption{', caption, '}'),
-    paste0('\\label{', label, '}'), '\\centering', '\\footnotesize',
-    '\\setlength{\\tabcolsep}{4pt}', paste0('\\begin{tabular}{', columns, '}'),
+    paste0('\\label{', label, '}'), '\\centering', paste0('\\', size),
+    paste0('\\setlength{\\tabcolsep}{', spacing, 'pt}'), paste0('\\begin{tabular}{', columns, '}'),
     '\\toprule', header, '\\midrule', rows, '\\bottomrule', '\\end{tabular}',
     '\\end{table}'), file.path(output_dir, 'tables', paste0(name, '.tex')))
 }
@@ -554,7 +555,7 @@ write_table('reviewer1_comparisons', paste0('Paired MAE differences for history 
   'the Temporal ConvNet. Intervals are pointwise; Holm adjustment covers four contrasts ',
   'separately for each resampling scheme.'), 'tab:r1_comparisons', 'lrrrrrr',
   'Target & $\\Delta$MAE & Match 95\\% CI & $p_{\\mathrm{Holm}}$ & Panel 95\\% CI & $p_{\\mathrm{Holm}}$ & Matches \\\\',
-  rows, 'blue')
+  rows, 'blue', size = 'footnotesize', spacing = 3)
 rows <- character()
 for (model in c('LMM', 'XGBoost')) {
   rows <- c(rows, paste0('\\multicolumn{6}{l}{\\textit{', model, '}} \\\\'))
@@ -577,10 +578,13 @@ write_table('reviewer1_smearing', paste0('Retransformation sensitivity on the sa
 rows <- with(coverage_metrics, sprintf('%s & %d & %d & %s & %.4f & %.4f & $%.4f$ \\\\',
   gsub('-', '--', length_group, fixed = TRUE), n_competitions, n_panels,
   format(n, big.mark = ',', trim = TRUE), mae_xgf, mae_xgd, bias_xgf))
-write_table('rolling_coverage', 'Observation-weighted rolling-forecast error by competition coverage.',
+write_table('rolling_coverage', sprintf(paste0('Observation-weighted rolling-forecast error ',
+  'by competition coverage (%s team--match records; %s matches).'),
+  format(nrow(rolling), big.mark = ',', trim = TRUE),
+  format(n_distinct(rolling$match_id), big.mark = ',', trim = TRUE)),
   'tab:coverage_errors', 'lrrrrrr',
   'Coverage & Competitions & Panels & $N$ & MAE $\\mathrm{xG}^{F}$ & MAE $\\mathrm{xG}^{D}$ & Bias $\\mathrm{xG}^{F}$ \\\\',
-  rows, 'reviewerThree')
+  rows, 'reviewerThree', size = 'normalsize', spacing = 4)
 rows <- character()
 for (i in seq_along(cohorts)) {
   p <- filter(calendar_metrics, cohort == names(cohorts)[i])
@@ -597,10 +601,10 @@ for (i in seq_along(cohorts)) {
   rows <- c(rows, '\\addlinespace')
 }
 write_table('calendar_forecasting', paste0('Calendar-time test performance with fits frozen on ',
-  format(test_start, '%d %B %Y'), '. All models use the same complete match pairs. ',
+  trimws(format(test_start, '%e %B %Y')), '. All models use the same complete match pairs. ',
   'New competition--seasons have no observations in fitting; $n$ counts team--match records.'),
   'tab:calendar', 'lrrrr', c(' & \\multicolumn{2}{c}{$\\mathrm{xG}^{F}$} & \\multicolumn{2}{c}{$\\mathrm{xG}^{D}$} \\\\',
-  'Model & MAE & RMSE & MAE & RMSE \\\\'), rows, 'reviewerFour')
+  'Model & MAE & RMSE & MAE & RMSE \\\\'), rows, 'reviewerFour', spacing = 6)
 rows <- with(point_diagnostics, sprintf('%s & %.3f & %.3f & $%.3f$ & %.2f & %.2f \\\\',
   model, mae, rmse, bias, direction_accuracy, weighted_direction_accuracy))
 write_table('point_forecast_diagnostics', sprintf(paste0('Point-forecast diagnostics on %s common ',

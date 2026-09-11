@@ -22,7 +22,7 @@ df <- read_csv('df.csv', show_col_types = FALSE)
 df_model <- read_csv('df_model.csv', show_col_types = FALSE)
 
 # Table 2 ####
-df %>%
+data_coverage <- df %>%
   filter(!is.na(statsbomb_xg)) %>%
   mutate(
     statsbomb_xg = as.numeric(statsbomb_xg),
@@ -31,11 +31,11 @@ df %>%
   bind_rows(mutate(., country_name = 'Total', competition_name = 'All competitions')) %>%
   group_by(country_name, competition_name) %>%
   summarise(
-    seasons = n_distinct(season_id),
+    seasons = n_distinct(paste(competition_id, season_id, sep = '_')),
     seasons_included = paste(sort(unique(season_name)), collapse = ', '),
     matches = n_distinct(match_id),
-    teams = n_distinct(team_id),
-    team_match_observations = n_distinct(paste(match_id, team_id, sep = '_')),
+    teams = n_distinct(c(team_id, opponent_id)),
+    team_match_observations = 2L * n_distinct(match_id),
     shots = n(),
     goals = sum(is_goal_num, na.rm = TRUE),
     total_xg = sum(statsbomb_xg, na.rm = TRUE),
@@ -45,6 +45,9 @@ df %>%
     .groups = 'drop'
   ) %>%
   arrange(country_name == 'Total', country_name, competition_name)
+
+write_csv(data_coverage, file.path(results_dir, 'data_coverage.csv'))
+print(data_coverage)
 
 # Table 3 ####
 df_model %>%
@@ -64,7 +67,7 @@ df_model %>%
   ) %>%
   slice_head(n = 6)
 
-# Table 7 ####
+# Table 6 ####
 
 df_plot <- df %>%
   group_by(match_id) %>%
@@ -93,6 +96,20 @@ team_match_xg <- df_plot %>%
     .groups = 'drop'
   )
 
+# Restore the opposite perspective when a team recorded no shots.
+zero_shot_teams <- team_match_xg %>%
+  rename(
+    team_id = opponent_id, opponent_id = team_id,
+    team_name = opponent_name, opponent_name = team_name,
+    goals_for = goals_against, goals_against = goals_for
+  ) %>%
+  mutate(
+    home_away = recode(home_away, home = 'away', away = 'home'),
+    xG_for = 0, shots_for = 0L
+  ) %>%
+  anti_join(team_match_xg, by = c('match_id', 'team_id'))
+team_match_xg <- bind_rows(team_match_xg, zero_shot_teams)
+
 opponent_xg <- team_match_xg %>%
   select(
     match_id,
@@ -110,20 +127,26 @@ team_match_xg <- team_match_xg %>%
     xG_diff = xG_for - xG_against
   )
 
-team_match_xg %>%
-  filter(!is.na(xG_against)) %>%
+stopifnot(all(table(team_match_xg$match_id) == 2L),
+          !anyNA(team_match_xg$xG_against))
+
+descriptive_team_match <- team_match_xg %>%
   group_by(
     country_name,
     competition_name
   ) %>%
   summarise(
+    n = n(),
     Mean_xG_F = mean(xG_for, na.rm = TRUE),
     SD_xG_F = sd(xG_for, na.rm = TRUE),
     Mean_xG_D = mean(xG_diff, na.rm = TRUE),
     SD_xG_D = sd(xG_diff, na.rm = TRUE),
     .groups = 'drop'
   ) %>%
-  arrange(country_name, competition_name) %>%
+  arrange(country_name, competition_name)
+
+write_csv(descriptive_team_match, file.path(results_dir, 'descriptive_team_match.csv'))
+descriptive_team_match %>%
   transmute(
     Country = country_name,
     Competition = competition_name,
