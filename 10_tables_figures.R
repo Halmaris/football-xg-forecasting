@@ -548,7 +548,7 @@ plot_df <- plot_df %>%
     model_family = case_when(
       arima_model == 'Other' ~ 'Other',
       d > 0 ~ 'ARIMA',
-      p == 0 & q == 0 ~ 'No AR/MA terms',
+      p == 0 & q == 0 ~ 'ARIMA(0,0,0)',
       p > 0 & q == 0 ~ 'AR',
       p == 0 & q > 0 ~ 'MA',
       p > 0 & q > 0 ~ 'ARMA',
@@ -557,7 +557,7 @@ plot_df <- plot_df %>%
     model_family = factor(
       model_family,
       levels = c(
-        'No AR/MA terms',
+        'ARIMA(0,0,0)',
         'AR',
         'MA',
         'ARMA',
@@ -605,7 +605,7 @@ p <- ggplot(
   scale_fill_manual(
     name = NULL,
     values = c(
-      'No AR/MA terms' = '#666666',
+      'ARIMA(0,0,0)' = '#666666',
       'AR' = '#0072B2',
       'MA' = '#D55E00',
       'ARMA' = '#CC79A7',

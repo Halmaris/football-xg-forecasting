@@ -453,8 +453,8 @@ points_data$x_position <- points_data$n_seasons + offsets
 points_data$highlight <- ifelse(points_data$competition_name %in% names(league_colors),
   points_data$competition_name, 'Other competitions')
 points_data$display_label <- points_data$competition_name
-labels <- c('Bundesliga' = 'Bundesliga (AUT)', 'Superliga' = 'Superliga (DEN)',
-  'Super Liga' = 'Super Liga (SVK)', 'Primera División' = 'Primera Division (URU)')
+labels <- c('Bundesliga' = 'Bundesliga (AUT)', 'Superliga' = 'Superliga (DNK)',
+  'Super Liga' = 'Super Liga (SVK)', 'Primera División' = 'Primera Division (URY)')
 matched <- points_data$competition_name %in% names(labels)
 points_data$display_label[matched] <- labels[points_data$competition_name[matched]]
 style <- theme_classic(base_size = 11, base_family = 'Helvetica') +
