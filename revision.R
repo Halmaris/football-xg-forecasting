@@ -713,7 +713,7 @@ write_table('rolling_coverage', sprintf(paste0('Observation-weighted rolling-for
   format(nrow(rolling), big.mark = ',', trim = TRUE),
   format(n_distinct(rolling$match_id), big.mark = ',', trim = TRUE)),
   'tab:coverage_errors', 'lrrrrrr',
-  '\\textbf{\\boldmath Coverage} & \\textbf{\\boldmath Competitions} & \\textbf{\\boldmath Panels} & \\textbf{\\boldmath $N$} & \\textbf{\\boldmath MAE $\\mathrm{xG}^{F}$ $\\downarrow$} & \\textbf{\\boldmath MAE $\\mathrm{xG}^{D}$ $\\downarrow$} & \\textbf{\\boldmath Bias $\\mathrm{xG}^{F}$ $\\rightarrow 0$} \\\\',
+  '\\textbf{\\boldmath Coverage} & \\textbf{\\boldmath Competitions} & \\textbf{\\boldmath Panels} & \\textbf{\\boldmath $n$} & \\textbf{\\boldmath MAE $\\mathrm{xG}^{F}$ $\\downarrow$} & \\textbf{\\boldmath MAE $\\mathrm{xG}^{D}$ $\\downarrow$} & \\textbf{\\boldmath Bias $\\mathrm{xG}^{F}$ $\\rightarrow 0$} \\\\',
   rows, size = 'normalsize', spacing = 4)
 rows <- character()
 for (i in seq_along(cohorts)) {
