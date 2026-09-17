@@ -683,7 +683,7 @@ write_table('reviewer1_comparisons', paste0('Paired MAE differences for history 
   'and matched-information model comparison. Positive differences favor full LMM or ',
   'the Temporal ConvNet. Intervals are pointwise; Holm adjustment covers four contrasts ',
   'separately for each resampling scheme.'), 'tab:r1_comparisons', 'lrrrrrr',
-  'Target & $\\Delta$MAE & Match 95\\% CI & $p_{\\mathrm{Holm}}$ & Panel 95\\% CI & $p_{\\mathrm{Holm}}$ & Matches \\\\',
+  '\\textbf{\\boldmath Target} & \\textbf{\\boldmath $\\Delta$MAE} & \\textbf{\\boldmath Match 95\\% CI} & \\textbf{\\boldmath $p_{\\mathrm{Holm}}$} & \\textbf{\\boldmath Panel 95\\% CI} & \\textbf{\\boldmath $p_{\\mathrm{Holm}}$} & \\textbf{\\boldmath Matches} \\\\',
   rows, size = 'footnotesize', spacing = 3)
 rows <- character()
 for (model in c('LMM', 'XGBoost')) {
@@ -702,8 +702,9 @@ for (model in c('LMM', 'XGBoost')) {
 write_table('reviewer1_smearing', paste0('Retransformation sensitivity on the same ',
   format(nrow(xgb_full), big.mark = ',', trim = TRUE),
   ' test observations. Smearing factors were estimated from validation errors.'),
-  'tab:smearing', 'lrrrrr', c(' & \\multicolumn{3}{c}{$\\mathrm{xG}^{F}$} & \\multicolumn{2}{c}{$\\mathrm{xG}^{D}$} \\\\',
-  'Specification & MAE $\\downarrow$ & RMSE $\\downarrow$ & Bias $\\rightarrow 0$ & MAE $\\downarrow$ & RMSE $\\downarrow$ \\\\'), rows)
+  'tab:smearing', 'lrrrrr', c('\\multirow{2}{*}{\\textbf{\\boldmath Specification}} & \\multicolumn{3}{c}{\\textbf{\\boldmath $\\mathrm{xG}^{F}$}} & \\multicolumn{2}{c}{\\textbf{\\boldmath $\\mathrm{xG}^{D}$}} \\\\',
+  '\\cmidrule(lr){2-4}\\cmidrule(lr){5-6}',
+  ' & \\textbf{\\boldmath MAE $\\downarrow$} & \\textbf{\\boldmath RMSE $\\downarrow$} & \\textbf{\\boldmath Bias $\\rightarrow 0$} & \\textbf{\\boldmath MAE $\\downarrow$} & \\textbf{\\boldmath RMSE $\\downarrow$} \\\\'), rows)
 rows <- with(coverage_metrics, sprintf('%s & %d & %d & %s & %.4f & %.4f & $%.4f$ \\\\',
   gsub('-', '--', length_group, fixed = TRUE), n_competitions, n_panels,
   format(n, big.mark = ',', trim = TRUE), mae_xgf, mae_xgd, bias_xgf))
@@ -712,7 +713,7 @@ write_table('rolling_coverage', sprintf(paste0('Observation-weighted rolling-for
   format(nrow(rolling), big.mark = ',', trim = TRUE),
   format(n_distinct(rolling$match_id), big.mark = ',', trim = TRUE)),
   'tab:coverage_errors', 'lrrrrrr',
-  'Coverage & Competitions & Panels & $N$ & MAE $\\mathrm{xG}^{F}\\downarrow$ & MAE $\\mathrm{xG}^{D}\\downarrow$ & Bias $\\mathrm{xG}^{F}\\rightarrow 0$ \\\\',
+  '\\textbf{\\boldmath Coverage} & \\textbf{\\boldmath Competitions} & \\textbf{\\boldmath Panels} & \\textbf{\\boldmath $N$} & \\textbf{\\boldmath MAE $\\mathrm{xG}^{F}$ $\\downarrow$} & \\textbf{\\boldmath MAE $\\mathrm{xG}^{D}$ $\\downarrow$} & \\textbf{\\boldmath Bias $\\mathrm{xG}^{F}$ $\\rightarrow 0$} \\\\',
   rows, size = 'normalsize', spacing = 4)
 rows <- character()
 for (i in seq_along(cohorts)) {
@@ -735,8 +736,9 @@ write_table('calendar_forecasting', paste0('Calendar-time test performance with 
   trimws(format(test_start, '%e %B %Y')), '. All models use the same complete match pairs. ',
   'New competition--seasons have no observations in fitting; $n$ counts team--match records. ',
   '\\rev{The XGBoost ablation removes only xG history and retains all other predictors.}'),
-  'tab:calendar', 'lrrrr', c(' & \\multicolumn{2}{c}{$\\mathrm{xG}^{F}$} & \\multicolumn{2}{c}{$\\mathrm{xG}^{D}$} \\\\',
-  'Model & MAE $\\downarrow$ & RMSE $\\downarrow$ & MAE $\\downarrow$ & RMSE $\\downarrow$ \\\\'), rows, spacing = 6)
+  'tab:calendar', 'lrrrr', c('\\multirow{2}{*}{\\textbf{\\boldmath Model}} & \\multicolumn{2}{c}{\\textbf{\\boldmath $\\mathrm{xG}^{F}$}} & \\multicolumn{2}{c}{\\textbf{\\boldmath $\\mathrm{xG}^{D}$}} \\\\',
+  '\\cmidrule(lr){2-3}\\cmidrule(lr){4-5}',
+  ' & \\textbf{\\boldmath MAE $\\downarrow$} & \\textbf{\\boldmath RMSE $\\downarrow$} & \\textbf{\\boldmath MAE $\\downarrow$} & \\textbf{\\boldmath RMSE $\\downarrow$} \\\\'), rows, spacing = 6)
 rows <- with(point_diagnostics, sprintf('%s & %.3f & %.3f & $%.3f$ & %.2f & %.2f \\\\',
   ifelse(model == 'TCN', 'Temporal ConvNet', model),
   mae, rmse, bias, direction_accuracy, weighted_direction_accuracy))
@@ -746,8 +748,9 @@ write_table('point_forecast_diagnostics', sprintf(paste0('Point-forecast diagnos
   'accuracy weights matches by observed $|\\mathrm{xG}^{D}|$.'),
   format(nrow(common_keys), big.mark = ',', trim = TRUE),
   format(point_diagnostics$n[1], big.mark = ',', trim = TRUE), threshold),
-  'tab:point_diagnostics', 'lrrrrr', c(' & \\multicolumn{3}{c}{High $\\mathrm{xG}^{F}$} & \\multicolumn{2}{c}{Direction accuracy (\\%)} \\\\',
-  'Model & MAE $\\downarrow$ & RMSE $\\downarrow$ & Bias $\\rightarrow 0$ & Ordinary $\\uparrow$ & Weighted $\\uparrow$ \\\\'), rows)
+  'tab:point_diagnostics', 'lrrrrr', c('\\multirow{2}{*}{\\textbf{\\boldmath Model}} & \\multicolumn{3}{c}{\\textbf{\\boldmath High $\\mathrm{xG}^{F}$}} & \\multicolumn{2}{c}{\\textbf{\\boldmath Direction accuracy (\\%)}} \\\\',
+  '\\cmidrule(lr){2-4}\\cmidrule(lr){5-6}',
+  ' & \\textbf{\\boldmath MAE $\\downarrow$} & \\textbf{\\boldmath RMSE $\\downarrow$} & \\textbf{\\boldmath Bias $\\rightarrow 0$} & \\textbf{\\boldmath Ordinary $\\uparrow$} & \\textbf{\\boldmath Weighted $\\uparrow$} \\\\'), rows)
 capture.output(sessionInfo(), file = out('sessionInfo.txt'))
 print(inference)
 print(calendar_metrics)
