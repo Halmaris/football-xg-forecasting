@@ -5,6 +5,7 @@ library(lme4)
 library(zoo)
 library(ggplot2)
 library(ggrepel)
+library(xgboost)
 
 # Settings ----
 output_dir <- 'results/revision'
@@ -15,6 +16,9 @@ validation_start <- as.Date('2024-07-01')
 test_start <- as.Date('2025-07-01')
 n_boot <- 5000
 seed <- 20260910
+xgb_seed <- 20260917
+xgb_trials <- 100
+xgb_threads <- 4
 
 read_result <- function(name) read_csv(file.path('results', name), show_col_types = FALSE)
 save_csv <- function(df, name) write_csv(df, file.path(output_dir, paste0(name, '.csv')))
@@ -111,6 +115,46 @@ paired_errors <- function(a, b, target) {
     error_2 = abs(.data[[paste0('predicted_', target, '_2')]] - actual),
     difference = error_1 - error_2)
 }
+
+xgb_numeric <- function(k, history = TRUE) {
+  context <- c('match_week', 'n_previous_matches')
+  if (!history) return(context)
+  c(context, unlist(lapply(c('for', 'against', 'diff'), function(target)
+    paste0('lag', c(1, 2, 3, 5), '_xG_', target))),
+    paste0('rolling', k, '_xG_', c('for', 'against', 'diff')),
+    paste0('opponent_rolling', k, '_xG_', c('for', 'against', 'diff')))
+}
+
+xgb_encoder <- function(df, numeric) {
+  categorical <- c('home_away', 'competition_id', 'season_id', 'team_id', 'opponent_id')
+  stopifnot(!anyNA(df[categorical]))
+  list(medians = vapply(df[numeric], median, numeric(1), na.rm = TRUE),
+    levels = lapply(df[categorical], function(x) sort(unique(as.character(x)))))
+}
+
+xgb_matrix <- function(df, encoder) {
+  numeric <- names(encoder$medians)
+  x <- as.matrix(df[numeric])
+  for (j in seq_along(numeric)) x[is.na(x[, j]), j] <- encoder$medians[j]
+  stopifnot(all(is.finite(x)))
+  x <- Matrix::Matrix(x, sparse = TRUE)
+  for (variable in names(encoder$levels)) {
+    levels <- encoder$levels[[variable]]
+    j <- match(as.character(df[[variable]]), levels)
+    known <- which(!is.na(j))
+    # Unseen categories have all-zero indicators, as in the primary encoding.
+    indicators <- Matrix::sparseMatrix(i = known, j = j[known], x = 1,
+      dims = c(nrow(df), length(levels)),
+      dimnames = list(NULL, paste0(variable, '_', levels)))
+    x <- cbind(x, indicators)
+  }
+  xgb.DMatrix(x, nthread = xgb_threads)
+}
+
+xgb_parameters <- function(config) c(list(objective = 'reg:squarederror',
+  tree_method = 'hist', device = 'cpu', nthread = xgb_threads, verbosity = 0),
+  as.list(config[c('max_depth', 'eta', 'subsample', 'colsample_bytree',
+    'colsample_bylevel', 'min_child_weight', 'alpha', 'lambda', 'gamma', 'seed')]))
 
 # 1. LMM history ablation and validation smearing ----
 message('LMM history ablation and smearing')
@@ -237,21 +281,79 @@ calendar_full <- fit_lmm(fit_data, selected$k[selected$model == 'LMM full'])
 calendar_context <- fit_lmm(fit_data)
 saveRDS(list(full = calendar_full, context = calendar_context),
   file.path(output_dir, 'calendar_models.rds'))
+
+# The same 100 random configurations are evaluated separately for each feature set.
+# All selection uses train/validation dates; no primary-study configuration is reused.
+set.seed(xgb_seed)
+xgb_grid <- tibble(trial = seq_len(xgb_trials),
+  k = sample(rep(rolling_windows, length.out = xgb_trials)),
+  max_depth = sample(2:8, xgb_trials, replace = TRUE),
+  eta = exp(runif(xgb_trials, log(0.01), log(0.20))),
+  nrounds = sample(100:1500, xgb_trials, replace = TRUE),
+  subsample = runif(xgb_trials, 0.60, 1.00),
+  colsample_bytree = runif(xgb_trials, 0.60, 1.00),
+  colsample_bylevel = runif(xgb_trials, 0.60, 1.00),
+  min_child_weight = exp(runif(xgb_trials, log(1), log(50))),
+  alpha = runif(xgb_trials, 0, 10),
+  lambda = exp(runif(xgb_trials, log(0.1), log(20))),
+  gamma = runif(xgb_trials, 0, 5), seed = xgb_seed + seq_len(xgb_trials))
+xgb_tuning <- xgb_selected <- xgb_forecasts <- list()
+for (variant in c('full', 'without_xG_history')) {
+  history <- variant == 'full'
+  windows <- if (history) rolling_windows else 0
+  matrices <- lapply(windows, function(k) {
+    encoder <- xgb_encoder(train, xgb_numeric(k, history))
+    training <- xgb_matrix(train, encoder)
+    setinfo(training, 'label', log1p(train$xG_for))
+    list(train = training, validation = xgb_matrix(validation, encoder))
+  })
+  names(matrices) <- as.character(windows)
+  scores <- numeric(xgb_trials)
+  for (i in seq_len(xgb_trials)) {
+    config <- xgb_grid[i, ]
+    m <- matrices[[as.character(if (history) config$k else 0)]]
+    model <- xgb.train(xgb_parameters(config), m$train, config$nrounds, verbose = 0)
+    scores[i] <- mean(abs(pmax(expm1(predict(model, m$validation)), 0) - validation$xG_for))
+    if (i %% 10 == 0) message('Calendar XGBoost ', variant, ': ', i, '/', xgb_trials)
+  }
+  tuning <- mutate(xgb_grid, variant, k = if (history) k else NA_integer_, mae = scores)
+  best <- tuning %>% arrange(mae, trial) %>% slice(1)
+  xgb_tuning[[variant]] <- tuning
+  xgb_selected[[variant]] <- best
+  encoder <- xgb_encoder(fit_data, xgb_numeric(best$k, history))
+  training <- xgb_matrix(fit_data, encoder)
+  setinfo(training, 'label', log1p(fit_data$xG_for))
+  model <- xgb.train(xgb_parameters(best), training, best$nrounds, verbose = 0)
+  xgb.save(model, file.path(output_dir, paste0('calendar_xgb_', variant, '.ubj')))
+  saveRDS(encoder, file.path(output_dir, paste0('calendar_xgb_', variant, '_encoder.rds')))
+  xgb_forecasts[[variant]] <- pair_forecasts(test,
+    pmax(expm1(predict(model, xgb_matrix(test, encoder))), 0))
+  save_csv(bind_rows(xgb_tuning), 'calendar_xgb_validation')
+  save_csv(bind_rows(xgb_selected), 'calendar_xgb_selected_config')
+}
 calendar_metadata <- test %>% transmute(match_id, team_id, match_date,
   competition_id, season_id, original_split,
   new_team_season = !team_season_id %in% fit_data$team_season_id,
   new_opponent_season = !opponent_season_id %in% fit_data$opponent_season_id,
   new_competition_season = !paste(competition_id, season_id) %in%
-    paste(fit_data$competition_id, fit_data$season_id))
+    paste(fit_data$competition_id, fit_data$season_id),
+  new_team_id = !team_id %in% fit_data$team_id,
+  new_opponent_id = !opponent_id %in% fit_data$opponent_id,
+  new_season_id = !season_id %in% fit_data$season_id)
 calendar_predictions <- bind_rows(
   'LMM full' = pair_forecasts(test, pmax(expm1(predict_log(calendar_full, test)), 0)),
   'LMM context only' = pair_forecasts(test, pmax(expm1(predict_log(calendar_context, test)), 0)),
   'Rolling mean' = pair_forecasts(test, test[[paste0('baseline_',
-    selected$k[selected$model == 'Rolling mean'])]]), .id = 'model') %>%
+    selected$k[selected$model == 'Rolling mean'])]]),
+  'XGBoost full' = xgb_forecasts$full,
+  'XGBoost without xG history' = xgb_forecasts$without_xG_history,
+  .id = 'model') %>%
   left_join(calendar_metadata, by = keys, relationship = 'many-to-one')
 save_csv(calendar_predictions, 'calendar_test_predictions')
 save_csv(calendar_metadata %>% count(new_competition_season, new_team_season,
   new_opponent_season, name = 'n'), 'calendar_new_levels')
+save_csv(calendar_metadata %>% count(new_competition_season, new_team_id,
+  new_opponent_id, new_season_id, name = 'n'), 'calendar_xgb_new_levels')
 cohorts <- list(All = calendar_predictions,
   'Observed season' = filter(calendar_predictions, !new_competition_season),
   'New season' = filter(calendar_predictions, new_competition_season))
@@ -260,17 +362,27 @@ calendar_metrics <- bind_rows(lapply(cohorts, function(p) {
 }), .id = 'cohort')
 save_csv(calendar_metrics, 'calendar_metrics')
 calendar_intervals <- calendar_draws <- list()
+calendar_comparisons <- tribble(~comparator, ~reference,
+  'LMM context only', 'LMM full',
+  'Rolling mean', 'LMM full',
+  'Rolling mean', 'XGBoost full',
+  'XGBoost without xG history', 'XGBoost full',
+  'XGBoost full', 'LMM full')
 for (cohort in names(cohorts)) {
   p <- cohorts[[cohort]]
-  for (comparator in c('LMM context only', 'Rolling mean')) {
+  for (i in seq_len(nrow(calendar_comparisons))) {
+    comparator <- calendar_comparisons$comparator[i]
+    reference <- calendar_comparisons$reference[i]
     for (target in targets) {
       errors <- paired_errors(filter(p, model == comparator),
-        filter(p, model == 'LMM full'), target) %>%
+        filter(p, model == reference), target) %>%
         left_join(select(calendar_metadata, all_of(keys), competition_id, season_id),
           by = keys, relationship = 'one-to-one')
-      contrast_seed <- seed + 1 + length(calendar_intervals)
+      # Preserve earlier LMM bootstrap draws while assigning new contrasts separate seeds.
+      contrast_seed <- if (i <= 2) seed + 1 + (match(cohort, names(cohorts)) - 1) * 4 +
+        (i - 1) * 2 + match(target, targets) - 1 else xgb_seed + 1000 + length(calendar_intervals)
       boot <- bootstrap_mae(errors, 'competition_season', contrast_seed)
-      label <- tibble(cohort, comparator, target)
+      label <- tibble(cohort, comparator, reference, target)
       calendar_intervals[[length(calendar_intervals) + 1]] <- bind_cols(label,
         tibble(n = nrow(errors), difference = mean(errors$difference), seed = contrast_seed),
         select(boot$summary, panels = n_units, ci_low, ci_high))
@@ -540,8 +652,8 @@ for (i in seq_along(c('LMM', 'XGBoost'))) {
 }
 invisible(dev.off())
 
-# 7. LaTeX tables (red revision text; rules remain black) ----
-write_table <- function(name, caption, label, columns, header, rows, color = 'red',
+# 7. LaTeX tables (only the new XGBoost calendar rows are red) ----
+write_table <- function(name, caption, label, columns, header, rows, color = 'black',
                         size = 'small', spacing = 5) {
   writeLines(c('\\begin{table}[!htbp]', paste0('\\color{', color, '}'),
     '\\arrayrulecolor{black}', paste0('\\captionsetup{labelfont={bf,color=', color,
@@ -591,7 +703,7 @@ write_table('reviewer1_smearing', paste0('Retransformation sensitivity on the sa
   format(nrow(xgb_full), big.mark = ',', trim = TRUE),
   ' test observations. Smearing factors were estimated from validation errors.'),
   'tab:smearing', 'lrrrrr', c(' & \\multicolumn{3}{c}{$\\mathrm{xG}^{F}$} & \\multicolumn{2}{c}{$\\mathrm{xG}^{D}$} \\\\',
-  'Specification & MAE & RMSE & Bias & MAE & RMSE \\\\'), rows)
+  'Specification & MAE $\\downarrow$ & RMSE $\\downarrow$ & Bias $\\rightarrow 0$ & MAE $\\downarrow$ & RMSE $\\downarrow$ \\\\'), rows)
 rows <- with(coverage_metrics, sprintf('%s & %d & %d & %s & %.4f & %.4f & $%.4f$ \\\\',
   gsub('-', '--', length_group, fixed = TRUE), n_competitions, n_panels,
   format(n, big.mark = ',', trim = TRUE), mae_xgf, mae_xgd, bias_xgf))
@@ -600,7 +712,7 @@ write_table('rolling_coverage', sprintf(paste0('Observation-weighted rolling-for
   format(nrow(rolling), big.mark = ',', trim = TRUE),
   format(n_distinct(rolling$match_id), big.mark = ',', trim = TRUE)),
   'tab:coverage_errors', 'lrrrrrr',
-  'Coverage & Competitions & Panels & $N$ & MAE $\\mathrm{xG}^{F}$ & MAE $\\mathrm{xG}^{D}$ & Bias $\\mathrm{xG}^{F}$ \\\\',
+  'Coverage & Competitions & Panels & $N$ & MAE $\\mathrm{xG}^{F}\\downarrow$ & MAE $\\mathrm{xG}^{D}\\downarrow$ & Bias $\\mathrm{xG}^{F}\\rightarrow 0$ \\\\',
   rows, size = 'normalsize', spacing = 4)
 rows <- character()
 for (i in seq_along(cohorts)) {
@@ -609,19 +721,22 @@ for (i in seq_along(cohorts)) {
     'New competition--seasons')[i]
   rows <- c(rows, paste0('\\multicolumn{5}{l}{\\textit{', label, ' ($n=',
     format(p$n[1], big.mark = ',', trim = TRUE), '$)}} \\\\'))
-  for (model in c('Rolling mean', 'LMM context only', 'LMM full')) {
+  for (model in c('Rolling mean', 'LMM context only', 'LMM full',
+                 'XGBoost without xG history', 'XGBoost full')) {
     a <- filter(p, .data$model == .env$model, target == 'xG_for')
     d <- filter(p, .data$model == .env$model, target == 'xG_diff')
-    rows <- c(rows, sprintf('%s & %.4f & %.4f & %.4f & %.4f \\\\',
-      model, a$mae, a$rmse, d$mae, d$rmse))
+    cells <- c(model, sprintf('%.4f', c(a$mae, a$rmse, d$mae, d$rmse)))
+    if (startsWith(model, 'XGBoost')) cells <- paste0('\\rev{', cells, '}')
+    rows <- c(rows, paste0(paste(cells, collapse = ' & '), ' \\\\'))
   }
   rows <- c(rows, '\\addlinespace')
 }
 write_table('calendar_forecasting', paste0('Calendar-time test performance with fits frozen on ',
   trimws(format(test_start, '%e %B %Y')), '. All models use the same complete match pairs. ',
-  'New competition--seasons have no observations in fitting; $n$ counts team--match records.'),
+  'New competition--seasons have no observations in fitting; $n$ counts team--match records. ',
+  '\\rev{The XGBoost ablation removes only xG history and retains all other predictors.}'),
   'tab:calendar', 'lrrrr', c(' & \\multicolumn{2}{c}{$\\mathrm{xG}^{F}$} & \\multicolumn{2}{c}{$\\mathrm{xG}^{D}$} \\\\',
-  'Model & MAE & RMSE & MAE & RMSE \\\\'), rows, spacing = 6)
+  'Model & MAE $\\downarrow$ & RMSE $\\downarrow$ & MAE $\\downarrow$ & RMSE $\\downarrow$ \\\\'), rows, spacing = 6)
 rows <- with(point_diagnostics, sprintf('%s & %.3f & %.3f & $%.3f$ & %.2f & %.2f \\\\',
   ifelse(model == 'TCN', 'Temporal ConvNet', model),
   mae, rmse, bias, direction_accuracy, weighted_direction_accuracy))
@@ -632,7 +747,7 @@ write_table('point_forecast_diagnostics', sprintf(paste0('Point-forecast diagnos
   format(nrow(common_keys), big.mark = ',', trim = TRUE),
   format(point_diagnostics$n[1], big.mark = ',', trim = TRUE), threshold),
   'tab:point_diagnostics', 'lrrrrr', c(' & \\multicolumn{3}{c}{High $\\mathrm{xG}^{F}$} & \\multicolumn{2}{c}{Direction accuracy (\\%)} \\\\',
-  'Model & MAE & RMSE & Bias & Ordinary & Weighted \\\\'), rows)
+  'Model & MAE $\\downarrow$ & RMSE $\\downarrow$ & Bias $\\rightarrow 0$ & Ordinary $\\uparrow$ & Weighted $\\uparrow$ \\\\'), rows)
 capture.output(sessionInfo(), file = out('sessionInfo.txt'))
 print(inference)
 print(calendar_metrics)
