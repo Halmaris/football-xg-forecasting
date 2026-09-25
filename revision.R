@@ -580,10 +580,10 @@ style <- theme_classic(base_size = 11, base_family = 'Helvetica') +
 left <- ggplot(points_data, aes(x_position, mae_xgf)) +
   geom_point(aes(colour = league_group, shape = highlight), size = 2.3) +
   geom_text_repel(aes(label = display_label),
-    colour = ink, size = 3.5, box.padding = 0.20, point.padding = 0.16,
+    colour = ink, size = 3.3, box.padding = 0.42, point.padding = 0.24,
     min.segment.length = 0, segment.colour = '#999999', segment.size = 0.25,
-    max.overlaps = Inf, max.iter = 20000, max.time = Inf, seed = 20260910,
-    force = 2, force_pull = 0.12) +
+    max.overlaps = Inf, max.iter = 100000, max.time = Inf, seed = 20260910,
+    force = 3, force_pull = 0.08) +
   scale_colour_manual(values = group_colors, breaks = names(group_colors)) +
   scale_shape_manual(values = league_shapes) +
   guides(colour = guide_legend(override.aes = list(shape = 16, size = 2.3)),
@@ -613,8 +613,8 @@ right <- ggplot(long_panels, aes(season_end, mae_xgf,
     legend.justification = c(1, 0), legend.title = element_blank(),
     legend.margin = margin(3, 3, 3, 3),
     legend.background = element_blank(), legend.key.height = grid::unit(0.45, 'cm'))
-pdf(out('rolling_error_stability.pdf'), width = 10.6, height = 5.2,
-  family = 'Helvetica', useDingbats = FALSE, title = 'Rolling forecast error by coverage and season')
+cairo_pdf(out('rolling_error_stability.pdf'), width = 10.6, height = 5.6,
+  family = 'Helvetica')
 grid::grid.newpage()
 left_grob <- ggplotGrob(left)
 right_grob <- ggplotGrob(right)

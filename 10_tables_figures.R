@@ -566,12 +566,9 @@ plot_df <- plot_df %>%
       )
     ),
     percentage = 100 * n / total_n,
-    count_label = format(
-      n,
-      big.mark = ',',
-      scientific = FALSE,
-      trim = TRUE
-    ),
+    count_label = ifelse(n >= 10000,
+      format(n, big.mark = ',', scientific = FALSE, trim = TRUE),
+      format(n, big.mark = '', scientific = FALSE, trim = TRUE)),
     value_label = paste0(
       count_label,
       ' (',
@@ -622,7 +619,7 @@ p <- ggplot(
   scale_x_continuous(
     limits = c(0, 5.2),
     breaks = log10(c(1, 10, 30, 100, 300, 1000, 3000, 10000)),
-    labels = c('1', '10', '30', '100', '300', '1,000', '3,000', '10,000'),
+    labels = c('1', '10', '30', '100', '300', '1000', '3000', '10,000'),
     expand = expansion(mult = c(0, 0))
   ) +
   scale_y_discrete(
@@ -815,7 +812,7 @@ p <- ggplot() +
       n = 6
     ),
     labels = scales::label_number(
-      accuracy = 0.01
+      accuracy = 0.01, style_negative = 'minus'
     ),
     expand = expansion(
       mult = c(0, 0)
@@ -1206,9 +1203,10 @@ p <- ggplot(
     scales = 'free_x',
     labeller = label_parsed
   ) +
+  scale_x_continuous(labels = scales::label_number(style_negative = 'minus')) +
   labs(
     x = expression(
-      Delta * MAE~'(XGBoost - rolling mean)'
+      Delta * MAE~'(XGBoost\u2014rolling mean)'
     ),
     y = NULL
   ) +
